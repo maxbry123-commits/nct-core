@@ -1,0 +1,53 @@
+agent_contract:
+  version: "1.0"
+  description: "Contrato estándar para cualquier agente del sistema NCT/APEX"
+
+  # ============ INPUT ============
+  input:
+    required:
+      - task_id          # UUID único por tarea
+      - objective        # Qué debe lograr
+      - context          # Estado actual + memoria relevante
+      - skills           # Lista de skills disponibles
+    optional:
+      - constraints      # Limitaciones (tiempo, recursos, scope)
+      - permissions      # Permisos del agente
+      - hints            # Sugerencias
+
+  # ============ EXECUTION ============
+  execution:
+    must_report:
+      - status           # pending | running | done | error
+      - progress         # 0.0 a 1.0
+      - errors           # Lista de errores
+    can_report:
+      - thoughts         # Razonamiento
+      - checkpoints      # Snapshots del estado
+      - partial_results  # Resultados parciales
+
+  # ============ OUTPUT ============
+  output:
+    required:
+      - result           # El producto final
+      - artifacts        # Archivos producidos
+      - state_update     # Cambios en state.json
+    optional:
+      - confidence       # 0-100
+      - evidence         # Pruebas, tests pasados
+      - suggestions      # Mejoras posibles
+
+  # ============ PROTOCOLS (opcionales) ============
+  protocols:
+    reasoning:
+      enabled: true
+      type: "chain-of-thought"
+    refutation:
+      enabled: true
+      min_questions: 3
+    consensus:
+      enabled: false
+      agents: []
+      min_votes: 2
+    validation:
+      enabled: true
+      checks: ["compile", "tests", "scope", "security"]
