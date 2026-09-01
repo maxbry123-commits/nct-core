@@ -24,25 +24,21 @@ jobs:
           git config --local lfs.fetchexclude '*'
           git config --local filter.lfs.smudge 'git-lfs smudge --skip -- %f'
           git config --local filter.lfs.process 'git-lfs filter-process --skip'
-          DEST_OLD='Fromtend code'
-          DEST_NEW='fromtend code NCT'
-          CORE_OLD='Core/Fromtend code'
-          if [ -d "$DEST_NEW" ] && [ -d "$DEST_OLD" ]; then
-            git mv -k "$DEST_OLD"/* "$DEST_NEW"/ || true
-            rmdir "$DEST_OLD" 2>/dev/null || rm -rf "$DEST_OLD"
-          elif [ -d "$DEST_OLD" ] && [ ! -d "$DEST_NEW" ]; then
-            git mv "$DEST_OLD" "$DEST_NEW"
-          fi
-          if [ -d "$CORE_OLD" ]; then
-            mkdir -p "$DEST_NEW"
-            git mv -k "$CORE_OLD"/* "$DEST_NEW"/ || true
-            rmdir "$CORE_OLD" 2>/dev/null || true
-          fi
-          if [ -f scripts/research_download_frontend_a.py ]; then
-            sed -i "s/'Fromtend code'/'fromtend code NCT'/g" .github/workflows/download-nct-fromtend-a.yml .github/workflows/download-nct-fromtend-b.yml || true
-          fi
-          git add -A
+          DEST_NEW='Frontend code NCT'
+          for OLD in 'Fromtend code' 'fromtend code NCT' 'Core/Fromtend code'; do
+            if [ -d "$OLD" ] && [ "$OLD" != "$DEST_NEW" ]; then
+              if [ ! -d "$DEST_NEW" ]; then
+                git mv "$OLD" "$DEST_NEW"
+              else
+                git mv -k "$OLD"/* "$DEST_NEW"/ || true
+                rmdir "$OLD" 2>/dev/null || rm -rf "$OLD"
+              fi
+            fi
+          done
+          test -d "$DEST_NEW"
+          test -f "$DEST_NEW"/Cline_0001.zip || echo 'WARN Cline zip missing'
+          git add -A -- ':!.github'
           git diff --cached --quiet && echo 'NOOP' && exit 0
-          git commit -m 'move: Fromtend code -> fromtend code NCT'
+          git commit -m 'move: DEST -> Frontend code NCT'
           git pull --rebase origin main
           git push --no-verify origin main
