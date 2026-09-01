@@ -1,0 +1,48 @@
+name: Rename Fromtend code NCT
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: rename-fromtend-code-nct
+  cancel-in-progress: false
+jobs:
+  rename:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+      - name: git mv DEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config --local lfs.fetchexclude '*'
+          git config --local filter.lfs.smudge 'git-lfs smudge --skip -- %f'
+          git config --local filter.lfs.process 'git-lfs filter-process --skip'
+          DEST_OLD='Fromtend code'
+          DEST_NEW='fromtend code NCT'
+          CORE_OLD='Core/Fromtend code'
+          if [ -d "$DEST_NEW" ] && [ -d "$DEST_OLD" ]; then
+            git mv -k "$DEST_OLD"/* "$DEST_NEW"/ || true
+            rmdir "$DEST_OLD" 2>/dev/null || rm -rf "$DEST_OLD"
+          elif [ -d "$DEST_OLD" ] && [ ! -d "$DEST_NEW" ]; then
+            git mv "$DEST_OLD" "$DEST_NEW"
+          fi
+          if [ -d "$CORE_OLD" ]; then
+            mkdir -p "$DEST_NEW"
+            git mv -k "$CORE_OLD"/* "$DEST_NEW"/ || true
+            rmdir "$CORE_OLD" 2>/dev/null || true
+          fi
+          if [ -f scripts/research_download_frontend_a.py ]; then
+            sed -i "s/'Fromtend code'/'fromtend code NCT'/g" .github/workflows/download-nct-fromtend-a.yml .github/workflows/download-nct-fromtend-b.yml || true
+          fi
+          git add -A
+          git diff --cached --quiet && echo 'NOOP' && exit 0
+          git commit -m 'move: Fromtend code -> fromtend code NCT'
+          git pull --rebase origin main
+          git push --no-verify origin main
