@@ -10,3 +10,7 @@
 {"number": 8, "parts": 1, "slug": "Frappe-Builder", "source": "https://github.com/frappe/builder.git", "source_commit": "12c787a97863a80731804e9a878d83b3daeedac8", "status": "COMPLETE"}
 {"number": 9, "parts": 6, "slug": "BESSER", "source": "https://github.com/BESSER-PEARL/BESSER.git", "source_commit": "80ec34f737370c7ae54167d19a6896e5faa09cf8", "status": "COMPLETE"}
 {"number": 10, "parts": 4, "slug": "tldraw", "source": "https://github.com/tldraw/tldraw.git", "source_commit": "5c56811965bea1d406d637547295e5cf5d043fa9", "status": "COMPLETE"}
+{"number": 12, "parts": 7, "slug": "drawio", "source": "https://github.com/jgraph/drawio.git", "source_commit": "fea5e877f3e6f849331ad09894f7edb9771708fa", "status": "COMPLETE"}
+{"number": 13, "parts": 1, "slug": "xyflow", "source": "https://github.com/xyflow/xyflow.git", "source_commit": "2903b14fa8cdcc4695aed20b38dcb20fe5d70540", "status": "COMPLETE"}
+{"number": 14, "parts": 1, "slug": "Craft.js", "source": "https://github.com/prevwong/craft.js.git", "source_commit": "23f44f3208ebf78d1632ec4aa7094001f513eb41", "status": "COMPLETE"}
+{"number": 15, "parts": 1, "slug": "Mermaid", "source": "https://github.com/mermaid-js/mermaid.git", "source_commit": "6206482a90dd94e3dcb7efc7a71d8850a124cbbd", "status": "COMPLETE"}
