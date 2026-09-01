@@ -28,3 +28,4 @@
 {"number": 21, "parts": 6, "slug": "TypeScript", "source": "https://github.com/microsoft/TypeScript.git", "source_commit": "253c5e2074a43301c93e34e5616c7249d86d71f6", "status": "COMPLETE"}
 {"number": 22, "parts": 1, "slug": "Parcel", "source": "https://github.com/parcel-bundler/parcel.git", "source_commit": "59484858a1a0bcbb71f74088956bb437a2db6505", "status": "COMPLETE"}
 {"number": 23, "parts": 1, "slug": "Radix-UI", "source": "https://github.com/radix-ui/primitives.git", "source_commit": "f7ecd5ab16f5e1e820eb5786a1419a98a2d594ae", "status": "COMPLETE"}
+{"number": 24, "parts": 12, "slug": "React-Spectrum", "source": "https://github.com/adobe/react-spectrum.git", "source_commit": "5129b30d8cf5a0791ea528b99c115c8d9dae0f9e", "status": "COMPLETE"}
