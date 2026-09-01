@@ -5,3 +5,7 @@
 {"number": 2, "parts": 21, "slug": "OpenDesign", "source": "https://github.com/nexu-io/open-design.git", "source_commit": "f65d245de9656d0e2d942baf83acde9dc9888475", "status": "COMPLETE"}
 {"number": 4, "parts": 2, "slug": "Onlook", "source": "https://github.com/onlook-dev/onlook.git", "source_commit": "423e2e924366419e418ee049093872d535eea41a", "status": "COMPLETE"}
 {"number": 5, "parts": 18, "slug": "Penpot", "source": "https://github.com/penpot/penpot.git", "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a", "status": "COMPLETE"}
+{"number": 6, "parts": 6, "slug": "Webstudio", "source": "https://github.com/webstudio-is/webstudio.git", "source_commit": "4a10645cb85ddd4167482f96329a5b80ae637c2d", "status": "COMPLETE"}
+{"number": 7, "parts": 1, "slug": "Silex", "source": "https://github.com/silexlabs/Silex.git", "source_commit": "4c8830181340fca1b2cb7379c33dd778424b091d", "status": "COMPLETE"}
+{"number": 8, "parts": 1, "slug": "Frappe-Builder", "source": "https://github.com/frappe/builder.git", "source_commit": "12c787a97863a80731804e9a878d83b3daeedac8", "status": "COMPLETE"}
+{"number": 9, "parts": 6, "slug": "BESSER", "source": "https://github.com/BESSER-PEARL/BESSER.git", "source_commit": "80ec34f737370c7ae54167d19a6896e5faa09cf8", "status": "COMPLETE"}
