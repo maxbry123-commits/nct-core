@@ -23,3 +23,5 @@
 {"number": 45, "parts": 1, "slug": "nolly-agent-skills", "source": "https://github.com/nolly-studio/agent-skills.git", "source_commit": "2008e7f671eb9f55989b73f9e33cbe06e74c428a", "status": "COMPLETE"}
 {"number": 46, "parts": 1, "slug": "PracticalSwan-agent-skills", "source": "https://github.com/PracticalSwan/agent-skills.git", "source_commit": "4069d9998049fe3f0eab69af733d50df82dbd5c2", "status": "COMPLETE"}
 {"number": 47, "parts": 1, "slug": "accessibility-skills", "source": "https://github.com/mgifford/accessibility-skills.git", "source_commit": "f2cbb99c5a45a02f47002923f020f5098b552bb0", "status": "COMPLETE"}
+{"number": 17, "parts": 3, "slug": "shadcn-ui", "source": "https://github.com/shadcn-ui/ui.git", "source_commit": "63c1308d112b6b1205d86244a156cca1abef5087", "status": "COMPLETE"}
+{"number": 20, "parts": 2, "slug": "Vite", "source": "https://github.com/vitejs/vite.git", "source_commit": "238ad811c7fb9e4730cbd317d0657867ed3447b3", "status": "COMPLETE"}
