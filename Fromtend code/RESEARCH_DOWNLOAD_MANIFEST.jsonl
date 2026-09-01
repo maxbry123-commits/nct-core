@@ -2,3 +2,5 @@
 {"number": 2, "parts": 6, "slug": "Aider", "source": "https://github.com/Aider-AI/aider.git", "source_commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c", "status": "COMPLETE"}
 {"number": 3, "parts": 1, "slug": "MUSE", "source": "https://github.com/myths-labs/muse.git", "source_commit": "5259758d028cef78b48f1ac56c94fb05e7213172", "status": "COMPLETE"}
 {"number": 1, "parts": 18, "slug": "OpenPencil", "source": "https://github.com/open-pencil/open-pencil.git", "source_commit": "be942783dcb03005de6e9ccf5a3f592d0dca107a", "status": "COMPLETE"}
+{"number": 2, "parts": 21, "slug": "OpenDesign", "source": "https://github.com/nexu-io/open-design.git", "source_commit": "f65d245de9656d0e2d942baf83acde9dc9888475", "status": "COMPLETE"}
+{"number": 4, "parts": 2, "slug": "Onlook", "source": "https://github.com/onlook-dev/onlook.git", "source_commit": "423e2e924366419e418ee049093872d535eea41a", "status": "COMPLETE"}
