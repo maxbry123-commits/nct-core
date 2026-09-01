@@ -38,3 +38,5 @@
 {"number": 33, "parts": 1, "slug": "Mitosis", "source": "https://github.com/BuilderIO/mitosis.git", "source_commit": "cb1e2105c21971f336a1d8a4ff9a0406716471a0", "status": "COMPLETE"}
 {"number": 34, "parts": 1, "slug": "TeleportHQ", "source": "https://github.com/teleporthq/teleport-code-generators.git", "source_commit": "f324ed53e044d250c2cb8d09b08296734fef9d19", "status": "COMPLETE"}
 {"number": 35, "parts": 2, "slug": "VvvebJs", "source": "https://github.com/givanz/VvvebJs.git", "source_commit": "1acbab7ebfe3e7b004f1f18c039d26550fc04bd8", "status": "COMPLETE"}
+{"number": 36, "parts": 1, "slug": "Bit", "source": "https://github.com/teambit/bit.git", "source_commit": "1600ee99d4e1003c05955f103e7f7aa122756690", "status": "COMPLETE"}
+{"number": 37, "parts": 1, "slug": "React-Cosmos", "source": "https://github.com/react-cosmos/react-cosmos.git", "source_commit": "aa2d7824289241837bd1eabf981f29db2e675b74", "status": "COMPLETE"}
