@@ -1,4 +1,4 @@
-# Nuevo workflow. Copia quirurgica del metodo mover del skill research-download-chain.
+# Nuevo workflow. Movimiento por Git tree: no descarga blobs y no reescribe archivos.
 name: Move files
 on:
   workflow_dispatch:
@@ -12,40 +12,39 @@ env:
   GIT_TERMINAL_PROMPT: "0"
 concurrency:
   group: move-fromtend-code-nct-literal
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   move-same-repo:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 1
           lfs: false
+          filter: blob:none
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
           persist-credentials: true
-      - name: Reubicar sin reescribir
+      - name: Reubicar arbol sin descargar ni reescribir blobs
         shell: bash
         run: |
           set -euo pipefail
           SRC='Frontend code NCT'
           DEST='Fromtend code NCT'
-          if [ -d "$SRC" ] && [ ! -e "$DEST" ]; then
-            git mv "$SRC" "$DEST"
-          elif [ -d "$SRC" ] && [ -d "$DEST" ]; then
-            shopt -s dotglob nullglob
-            for f in "$SRC"/*; do
-              [ -e "$DEST/$(basename "$f")" ] || git mv "$f" "$DEST/"
-            done
+          if git cat-file -e "HEAD:$SRC" 2>/dev/null && ! git cat-file -e "HEAD:$DEST" 2>/dev/null; then
+            TREE_SHA=$(git rev-parse "HEAD:$SRC")
+            git read-tree --prefix="$DEST/" "$TREE_SHA"
+            git rm -r --cached --sparse -- "$SRC"
           fi
-          test -d "$DEST"
+          git write-tree >/dev/null
       - name: Guardar main
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A -- ':!.github'
           git diff --cached --quiet && echo 'PASS NOOP: destino literal ya existe' && exit 0
           git commit -m 'move: Frontend code NCT to literal Fromtend code NCT'
           git pull --rebase origin main
