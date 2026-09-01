@@ -1,0 +1,52 @@
+# Nuevo workflow. Copia quirurgica del metodo mover del skill research-download-chain.
+name: Move files
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/move-fromtend-code-nct-literal.yml']
+permissions:
+  contents: write
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_TERMINAL_PROMPT: "0"
+concurrency:
+  group: move-fromtend-code-nct-literal
+  cancel-in-progress: false
+jobs:
+  move-same-repo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: true
+      - name: Reubicar sin reescribir
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC='Frontend code NCT'
+          DEST='Fromtend code NCT'
+          if [ -d "$SRC" ] && [ ! -e "$DEST" ]; then
+            git mv "$SRC" "$DEST"
+          elif [ -d "$SRC" ] && [ -d "$DEST" ]; then
+            shopt -s dotglob nullglob
+            for f in "$SRC"/*; do
+              [ -e "$DEST/$(basename "$f")" ] || git mv "$f" "$DEST/"
+            done
+          fi
+          test -d "$DEST"
+      - name: Guardar main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- ':!.github'
+          git diff --cached --quiet && echo 'PASS NOOP: destino literal ya existe' && exit 0
+          git commit -m 'move: Frontend code NCT to literal Fromtend code NCT'
+          git pull --rebase origin main
+          git push --no-verify origin HEAD:main
