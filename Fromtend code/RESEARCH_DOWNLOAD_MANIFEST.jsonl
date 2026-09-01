@@ -14,3 +14,12 @@
 {"number": 13, "parts": 1, "slug": "xyflow", "source": "https://github.com/xyflow/xyflow.git", "source_commit": "2903b14fa8cdcc4695aed20b38dcb20fe5d70540", "status": "COMPLETE"}
 {"number": 14, "parts": 1, "slug": "Craft.js", "source": "https://github.com/prevwong/craft.js.git", "source_commit": "23f44f3208ebf78d1632ec4aa7094001f513eb41", "status": "COMPLETE"}
 {"number": 15, "parts": 1, "slug": "Mermaid", "source": "https://github.com/mermaid-js/mermaid.git", "source_commit": "6206482a90dd94e3dcb7efc7a71d8850a124cbbd", "status": "COMPLETE"}
+{"number": 16, "parts": 5, "slug": "PlantUML", "source": "https://github.com/plantuml/plantuml.git", "source_commit": "c7d69645e01e17c1ec2ba210b8416d0612ca6fa8", "status": "COMPLETE"}
+{"number": 40, "parts": 1, "slug": "anthropic-skills", "source": "https://github.com/anthropics/skills.git", "source_commit": "3b3fad96af16a10759d930941b4520ba0c40edae", "status": "COMPLETE"}
+{"number": 41, "parts": 1, "slug": "microsoft-skills", "source": "https://github.com/microsoft/skills.git", "source_commit": "9bc79d516aebf686e293a04ab52c70a8ce6f5d14", "status": "COMPLETE"}
+{"number": 42, "parts": 1, "slug": "ui-ux-pro-max-skill", "source": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git", "source_commit": "f23267105ad1f4ccd94af45d382584ad45b586f7", "status": "COMPLETE"}
+{"number": 43, "parts": 1, "slug": "wordpress-agent-skills", "source": "https://github.com/Automattic/wordpress-agent-skills.git", "source_commit": "ea902bd8301564fa33e336c34114ab121f24c800", "status": "COMPLETE"}
+{"number": 44, "parts": 1, "slug": "frontend-audit-skill", "source": "https://github.com/colbymchenry/frontend-audit-skill.git", "source_commit": "2f35be45a1346d240592a0af81ce16d8fce95969", "status": "COMPLETE"}
+{"number": 45, "parts": 1, "slug": "nolly-agent-skills", "source": "https://github.com/nolly-studio/agent-skills.git", "source_commit": "2008e7f671eb9f55989b73f9e33cbe06e74c428a", "status": "COMPLETE"}
+{"number": 46, "parts": 1, "slug": "PracticalSwan-agent-skills", "source": "https://github.com/PracticalSwan/agent-skills.git", "source_commit": "4069d9998049fe3f0eab69af733d50df82dbd5c2", "status": "COMPLETE"}
+{"number": 47, "parts": 1, "slug": "accessibility-skills", "source": "https://github.com/mgifford/accessibility-skills.git", "source_commit": "f2cbb99c5a45a02f47002923f020f5098b552bb0", "status": "COMPLETE"}
