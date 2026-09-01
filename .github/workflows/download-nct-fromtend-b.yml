@@ -26,4 +26,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/research_download_frontend_b.py 'Fromtend code' '_work/frontend-b'
+          python3 scripts/research_download_frontend_b.py 'Frontend code NCT' '_work/frontend-b'
