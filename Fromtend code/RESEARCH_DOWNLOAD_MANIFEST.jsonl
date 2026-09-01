@@ -9,3 +9,4 @@
 {"number": 7, "parts": 1, "slug": "Silex", "source": "https://github.com/silexlabs/Silex.git", "source_commit": "4c8830181340fca1b2cb7379c33dd778424b091d", "status": "COMPLETE"}
 {"number": 8, "parts": 1, "slug": "Frappe-Builder", "source": "https://github.com/frappe/builder.git", "source_commit": "12c787a97863a80731804e9a878d83b3daeedac8", "status": "COMPLETE"}
 {"number": 9, "parts": 6, "slug": "BESSER", "source": "https://github.com/BESSER-PEARL/BESSER.git", "source_commit": "80ec34f737370c7ae54167d19a6896e5faa09cf8", "status": "COMPLETE"}
+{"number": 10, "parts": 4, "slug": "tldraw", "source": "https://github.com/tldraw/tldraw.git", "source_commit": "5c56811965bea1d406d637547295e5cf5d043fa9", "status": "COMPLETE"}
