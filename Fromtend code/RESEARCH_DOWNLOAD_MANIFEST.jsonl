@@ -25,3 +25,6 @@
 {"number": 47, "parts": 1, "slug": "accessibility-skills", "source": "https://github.com/mgifford/accessibility-skills.git", "source_commit": "f2cbb99c5a45a02f47002923f020f5098b552bb0", "status": "COMPLETE"}
 {"number": 17, "parts": 3, "slug": "shadcn-ui", "source": "https://github.com/shadcn-ui/ui.git", "source_commit": "63c1308d112b6b1205d86244a156cca1abef5087", "status": "COMPLETE"}
 {"number": 20, "parts": 2, "slug": "Vite", "source": "https://github.com/vitejs/vite.git", "source_commit": "238ad811c7fb9e4730cbd317d0657867ed3447b3", "status": "COMPLETE"}
+{"number": 21, "parts": 6, "slug": "TypeScript", "source": "https://github.com/microsoft/TypeScript.git", "source_commit": "253c5e2074a43301c93e34e5616c7249d86d71f6", "status": "COMPLETE"}
+{"number": 22, "parts": 1, "slug": "Parcel", "source": "https://github.com/parcel-bundler/parcel.git", "source_commit": "59484858a1a0bcbb71f74088956bb437a2db6505", "status": "COMPLETE"}
+{"number": 23, "parts": 1, "slug": "Radix-UI", "source": "https://github.com/radix-ui/primitives.git", "source_commit": "f7ecd5ab16f5e1e820eb5786a1419a98a2d594ae", "status": "COMPLETE"}
