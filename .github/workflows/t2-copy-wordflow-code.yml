@@ -1,0 +1,35 @@
+name: T2 copy Wordflow Code
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: t2-copy-wordflow-code
+  cancel-in-progress: false
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+      - name: clone agentes sparse y copiar anexos
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/maxbry123-commits/agentes.git /tmp/agentes
+          git -C /tmp/agentes sparse-checkout set 'Wordflow Code' 'wordflow' 'Skills wordflow LOOP bucle mhytos' 'Documentos proyectos wordflow code'
+          mkdir -p 'skills agente nct/Wordflow Code' 'Documentos proyectos nct/wordflow'
+          if [ -d '/tmp/agentes/Wordflow Code' ]; then cp -a '/tmp/agentes/Wordflow Code/.' 'skills agente nct/Wordflow Code/'; fi
+          if [ -d '/tmp/agentes/Skills wordflow LOOP bucle mhytos' ]; then mkdir -p 'skills agente nct/Skills wordflow LOOP bucle mhytos'; cp -a '/tmp/agentes/Skills wordflow LOOP bucle mhytos/.' 'skills agente nct/Skills wordflow LOOP bucle mhytos/'; fi
+          if [ -d '/tmp/agentes/wordflow' ]; then cp -a /tmp/agentes/wordflow/. 'Documentos proyectos nct/wordflow/'; fi
+          if [ -d '/tmp/agentes/Documentos proyectos wordflow code' ]; then mkdir -p 'Documentos proyectos nct/Documentos proyectos wordflow code'; cp -a '/tmp/agentes/Documentos proyectos wordflow code/.' 'Documentos proyectos nct/Documentos proyectos wordflow code/'; fi
+          git add -A -- ':!.github'
+          git diff --cached --quiet && echo NOOP && exit 0
+          git commit -m 'copy: Wordflow Code + anexos desde agentes'
+          git pull --rebase origin main
+          git push --no-verify origin main
