@@ -33,3 +33,8 @@
 {"number": 26, "parts": 8, "slug": "Storybook", "source": "https://github.com/storybookjs/storybook.git", "source_commit": "69f56259faf82fbcef8fe351fdaa0fb85a20e2a8", "status": "COMPLETE"}
 {"number": 29, "parts": 1, "slug": "GrapesJS", "source": "https://github.com/GrapesJS/grapesjs.git", "source_commit": "2bdeda85b82b8b9ceae42fd6558cbbcae5ec2d21", "status": "COMPLETE"}
 {"number": 30, "parts": 1, "slug": "Puck", "source": "https://github.com/puckeditor/puck.git", "source_commit": "84e1764016d6c7fbb7dc5653c384de74fbd3e667", "status": "COMPLETE"}
+{"number": 31, "parts": 8, "slug": "Plasmic", "source": "https://github.com/plasmicapp/plasmic.git", "source_commit": "bf9e3cca572321467a92f4d53b69eb00767816a6", "status": "COMPLETE"}
+{"number": 32, "parts": 4, "slug": "BuilderIO", "source": "https://github.com/BuilderIO/builder.git", "source_commit": "e518e5189f286911a48f34ae9d41c4aab3d0ef2c", "status": "COMPLETE"}
+{"number": 33, "parts": 1, "slug": "Mitosis", "source": "https://github.com/BuilderIO/mitosis.git", "source_commit": "cb1e2105c21971f336a1d8a4ff9a0406716471a0", "status": "COMPLETE"}
+{"number": 34, "parts": 1, "slug": "TeleportHQ", "source": "https://github.com/teleporthq/teleport-code-generators.git", "source_commit": "f324ed53e044d250c2cb8d09b08296734fef9d19", "status": "COMPLETE"}
+{"number": 35, "parts": 2, "slug": "VvvebJs", "source": "https://github.com/givanz/VvvebJs.git", "source_commit": "1acbab7ebfe3e7b004f1f18c039d26550fc04bd8", "status": "COMPLETE"}
