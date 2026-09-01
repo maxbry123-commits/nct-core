@@ -30,3 +30,6 @@
 {"number": 23, "parts": 1, "slug": "Radix-UI", "source": "https://github.com/radix-ui/primitives.git", "source_commit": "f7ecd5ab16f5e1e820eb5786a1419a98a2d594ae", "status": "COMPLETE"}
 {"number": 24, "parts": 12, "slug": "React-Spectrum", "source": "https://github.com/adobe/react-spectrum.git", "source_commit": "5129b30d8cf5a0791ea528b99c115c8d9dae0f9e", "status": "COMPLETE"}
 {"number": 25, "parts": 24, "slug": "Motion", "source": "https://github.com/motiondivision/motion.git", "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36", "status": "COMPLETE"}
+{"number": 26, "parts": 8, "slug": "Storybook", "source": "https://github.com/storybookjs/storybook.git", "source_commit": "69f56259faf82fbcef8fe351fdaa0fb85a20e2a8", "status": "COMPLETE"}
+{"number": 29, "parts": 1, "slug": "GrapesJS", "source": "https://github.com/GrapesJS/grapesjs.git", "source_commit": "2bdeda85b82b8b9ceae42fd6558cbbcae5ec2d21", "status": "COMPLETE"}
+{"number": 30, "parts": 1, "slug": "Puck", "source": "https://github.com/puckeditor/puck.git", "source_commit": "84e1764016d6c7fbb7dc5653c384de74fbd3e667", "status": "COMPLETE"}
