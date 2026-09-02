@@ -7,6 +7,25 @@
 
 Este archivo contiene únicamente la arquitectura del motor Wordflow Code: recepción de tareas de programación, pipeline, motores, tools, ejecución aislada, pruebas, evidencia y cierre. El kernel de decisión YAIWES/TEAM permanece documentado por separado.
 
+
+## Índice navegable
+
+- [1. Fuentes](#1-fuentes)
+- [2. Separación física y fuente real](#2-separacion-fisica-y-fuente-real)
+- [3. Huella física de NCT Core](#3-huella-fisica-de-nct-core)
+- [4. Arquitectura lógica de Wordflow Code](#4-arquitectura-logica-de-wordflow-code)
+- [5. Microflujo transversal](#5-microflujo-transversal)
+- [6. Flujo de adquisición y reciclaje](#6-flujo-de-adquisicion-y-reciclaje)
+- [7. Frontera con YAIWES](#7-frontera-con-yaiwes)
+- [8. Grok Build: piezas que corresponden a Wordflow Code](#8-grok-build-piezas-que-corresponden-a-wordflow-code)
+- [9. Control de seguridad obligatorio](#9-control-de-seguridad-obligatorio)
+- [10. Poda y Ports & Adapters](#10-poda-y-ports-adapters)
+- [11. Auditoría de lo existente](#11-auditoria-de-lo-existente)
+- [12. GAPS prioritarios](#12-gaps-prioritarios)
+- [13. Huella forense reproducible de Wordflow Code](#13-huella-forense-reproducible-de-wordflow-code)
+- [14. Método de reciclaje de código open source para Wordflow Code](#14-metodo-de-reciclaje-de-codigo-open-source-para-wordflow-code)
+- [15. Veredicto](#15-veredicto)
+
 ## 1. Fuentes
 
 - [Índice raíz Wordflow Code](https://github.com/maxbry123-commits/nct-core/blob/main/Readme%20arquitectura%20ra%C3%ADz%20estructura%20wordflow%20code.md)
