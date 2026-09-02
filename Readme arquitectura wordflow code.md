@@ -249,6 +249,119 @@ Antes de copiar código:
 9. Añadir pruebas de seguridad y egress para herramientas externas.
 10. Probar solicitud→runner→tests→evidence→publish E2E.
 
-## 13. Veredicto
+## 13. Huella forense reproducible de Wordflow Code
+
+**Árbol NCT auditado:** `29927fc5032ffc9682bb54f067439fb619191d23`.  
+**Árbol del runtime en agentes:** `20a030af86129b5d388eef4f10983b385123740e`.
+
+| Raíz | Archivos | Python | Tests localizados | Función comprobada |
+|---|---:|---:|---:|---|
+| `nct-core/Wordflow Code/` | 12 | 0 | 0 | Documentación, reglas, skill y cables |
+| `nct-core/code-programming-engine/` | 12 | 2 | 0 | Pool mínimo y mapas de migración |
+| `nct-core/Core/` | 1 | 0 | 0 | Marcador vacío |
+| `agentes/extensions/wordflow/` | 379 | 310 | 134 | Runtime canónico vivo |
+| `agentes/extensions/wordflow_kernel/` | 101 | 94 | 27 | Kernel operativo que gobierna el runtime |
+| `agentes/agente-yaiwes/code-programming-engine/` | incluido en el scaffold | parcial | 1 smoke | Destino nuevo aún no equivalente |
+
+### Árbol físico comprobado en NCT Core
+
+```text
+main/
+├── Wordflow Code/
+│   ├── Readme/
+│   │   ├── README.md
+│   │   └── Readme1/
+│   │       ├── CABLE-DEPLOY-ROUTER.md
+│   │       ├── CABLE-PASO-CONTROL.md
+│   │       └── CABLE-PLUGIN-ROUTER.md
+│   ├── SOURCE.md
+│   └── skills/
+│       ├── CABLE.md
+│       ├── METODO-DE-TRABAJO.md
+│       ├── RULES.yaml
+│       ├── SKILL.md
+│       ├── code Yaml sobre como se extrae los archivos del skills.yaml
+│       └── wordflow-code-deploy-router.skill
+├── code-programming-engine/
+│   ├── COPY_MANIFEST.json
+│   ├── MIGRATION_STATUS.md
+│   ├── ORIGIN_MAP.md
+│   ├── README.md
+│   ├── SOURCE.md
+│   ├── instance_pool.py
+│   ├── programming_instance.py
+│   ├── catalogs/
+│   ├── engine-modules/
+│   ├── module-tests/
+│   ├── schema-contracts-io/
+│   └── standards-forensic/
+└── Core/
+    └── .keep
+```
+
+### Árbol lógico del runtime que debe cablearse, no duplicarse
+
+```text
+agentes/extensions/wordflow/
+├── reception/       input → contrato
+├── planner/         contrato → misión
+├── engine/          misión → runner → estado → evidencia
+├── motors/          ejecutores externos
+├── codegen/         DAG y generación
+├── contracts/       contratos estables
+├── schemas/         validación I/O
+├── standards/       sheriff, forense y gates
+├── state/           blackboard y ledger
+├── connectors/      GitHub y cuentas
+├── policies/        attach, sentinel y sheriff
+└── tests/           pruebas unitarias/integración
+```
+
+El cable correcto es una dependencia versionada hacia este runtime; copiarlo otra vez crea dos cuerpos editables y rompe la trazabilidad.
+
+## 14. Método de reciclaje de código open source para Wordflow Code
+
+Wordflow Code no decide la política global. Recibe un contrato aprobado por YAIWES y realiza la extracción, adaptación y verificación:
+
+1. Clonar o adquirir una fuente fijada por commit.
+2. Validar licencia y procedencia.
+3. Registrar árbol, SHA, dependencias y SBOM.
+4. Ejecutar secret scan y auditar egress.
+5. Localizar la función ejecutora mínima.
+6. Separar “decide” de “hace”.
+7. Mantener la acción concreta; excluir el bucle autónomo ajeno.
+8. Implementar un puerto Wordflow estable.
+9. Adaptar por subproceso, API, FFI o contenedor.
+10. Ejecutar en worktree/sandbox aislado.
+11. Probar paridad, idempotencia, rollback y modo de fallo.
+12. Generar evidencia y mapa origen → destino.
+13. Entregar el passport a YAIWES para `mount-guard`.
+14. Publicar únicamente después de PASS.
+
+```text
+contrato YAIWES
+→ adquirir fuente
+→ fingerprint
+→ poda
+→ adaptador
+→ worktree/sandbox
+→ tests
+→ evidencia
+→ passport
+→ aprobación YAIWES
+→ publish
+```
+
+### Regla de no reescritura
+
+- No reescribir `extensions/wordflow/engine/code_path_runner.py`.
+- No copiar un repositorio completo cuando solo se necesita una capacidad.
+- No importar directamente el agente externo desde el kernel.
+- No declarar migración completa sin paridad y pruebas E2E.
+- Mantener `ORIGIN_MAP.md`, `COPY_MANIFEST.json`, commit, licencia y SHA.
+- Un componente que no pasa seguridad, contrato o paridad queda fuera del montaje.
+
+
+## 15. Veredicto
 
 Wordflow Code posee un runtime real y valioso, pero todavía no vive operativamente dentro de NCT Core. La raíz NCT es documental y el motor permanece distribuido. Estado: **PARCIAL / FAIL-CLOSED**.
