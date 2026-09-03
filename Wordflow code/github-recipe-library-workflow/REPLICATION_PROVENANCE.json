@@ -1,0 +1,9 @@
+{
+  "source_repository": "maxbry123-commits/agentes",
+  "source_commit": "0efb147c54059c2ae1a907b98f7b046ccd2be706",
+  "source_path": "agente-yaiwes/multi-workflow-engine/instances/github-recipe-library-workflow",
+  "source_tree_sha256": "654e1a16b97c994ccd510afe1cc516904078bce8587b3938d1159dc0f291bc84",
+  "destination": "Wordflow code/github-recipe-library-workflow",
+  "components": 12,
+  "gaps": 0
+}
