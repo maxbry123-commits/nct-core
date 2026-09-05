@@ -1,0 +1,84 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "Storybook",
+      "parts": 8,
+      "path": "docs/_assets/writing-tests/addon-vitest-overview.mp4",
+      "source_commit": "69f56259faf82fbcef8fe351fdaa0fb85a20e2a8",
+      "source_url": "https://github.com/storybookjs/storybook.git",
+      "destination": "Componentes open soure nct/Storybook/docs/_assets/writing-tests/addon-vitest-overview.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "bc421401ba1339420684ef658121caacf8d15f2e",
+      "bytes": 10248994,
+      "status": "PREPARED",
+      "sha256": "27543723a4ca1b349e7a1fb652d17cff60a4f352a0a8ee010470acb353608db5"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "docs/static/img/datasource-reference/rest-api/rest-api.gif",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/docs/static/img/datasource-reference/rest-api/rest-api.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "c92652e3119524c023826fc35700bc0b969e9f5a",
+      "bytes": 8670322,
+      "status": "PREPARED",
+      "sha256": "ef0289cf6c8f2e4d0afa804e0cf8c5948322a89ab96cfa432ac49b09fcccf118"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "docs/static/img/how-to/import-python/console.gif",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/docs/static/img/how-to/import-python/console.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "4a04bc1b2b41e79c8c6cc52dfbb6977e4aed1bf1",
+      "bytes": 8963517,
+      "status": "PREPARED",
+      "sha256": "6036e56a12c6d98e4415c94de414123a2a75959fed0567398673bb060619cab4"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "docs/static/img/tutorial/debugger/debugger.gif",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/docs/static/img/tutorial/debugger/debugger.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "3d51862f38237a6bc47e904b8bd32322f4ee96e9",
+      "bytes": 9254053,
+      "status": "PREPARED",
+      "sha256": "ab6eddb5811b512a7d12fbea64946e13047bfbecc14ee2bf5967f781826bb8e5"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "docs/static/img/widgets/dropdown/dropdown-dynamicvalues.gif",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/docs/static/img/widgets/dropdown/dropdown-dynamicvalues.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "770324b1c594d29a87e0a334a7d88dd2bfd104aa",
+      "bytes": 14196826,
+      "status": "PREPARED",
+      "sha256": "e6e9a17621cc7aab28209c81de9c568ce5988d0eede232e150b48e75fa10d8ed"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/Fiona-1.8.22-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/Fiona-1.8.22-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "41e06ff8698cd7489102c90e2a69496e10cd1788",
+      "bytes": 31406648,
+      "status": "PREPARED",
+      "sha256": "8876b768870a6d505519aa622fd2674e05218b677051a595b477c2507ed0249c"
+    }
+  ]
+}
