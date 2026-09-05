@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUSE Dashboard — Visualize Your AI Memory</title>
+    <meta name="description"
+        content="Load your MUSE project files and see a personalized dashboard. 100% client-side — your data never leaves your browser.">
+    <link rel="icon" href="https://raw.githubusercontent.com/myths-labs/muse/main/assets/logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #08080e;
+            --bg-card: #111119;
+            --bg-card-hover: #181825;
+            --border: #1e1e30;
+            --border-hover: #6c5ce7;
+            --text: #e0e0ec;
+            --text-dim: #8888aa;
+            --text-muted: #555570;
+            --accent: #c9a84c;
+            --accent-glow: rgba(201, 168, 76, 0.15);
+            --purple: #6c5ce7;
+            --purple-glow: rgba(108, 92, 231, 0.2);
+            --success: #00b894;
+            --warning: #fdcb6e;
+            --info: #74b9ff;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --font: 'Inter', -apple-system, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* ─── Nav ─── */
+        .nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 100;
+            background: rgba(8, 8, 14, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 0;
+        }
+
+        .nav-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .nav-logo img {
+            border-radius: 6px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        .btn-sm {
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            background: var(--accent);
+            color: #111 !important;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ─── Container ─── */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            text-align: center;
+            padding: 120px 0 48px;
+        }
+
+        .header h1 {
+            font-size: 2.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #e8d591);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+
+        .header p {
+            color: var(--text-dim);
+            font-size: 1.05rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .privacy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--accent-glow);
+            border: 1px solid rgba(201, 168, 76, 0.25);
+            border-radius: 20px;
+            padding: 6px 16px;
+            margin-top: 16px;
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+
+        /* ─── Upload Zone ─── */
+        .upload-zone {
+            background: var(--bg-card);
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 48px;
+            text-align: center;
+            margin: 32px auto;
+            max-width: 700px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .upload-zone h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .upload-zone p {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .upload-zone .icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .upload-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn-upload {
+            padding: 10px 24px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #111;
+        }
+
+        .btn-primary:hover {
+            background: #d4b35c;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border) !important;
+            color: var(--text-dim);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent) !important;
+            color: var(--text);
+        }
+
+        /* ─── Or Divider ─── */
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 24px auto;
+            max-width: 700px;
+            color: var(--text-muted);
+        }
+
+        .or-divider::before,
+        .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ─── Paste Zone ─── */
+        .paste-zone {
+            max-width: 700px;
+            margin: 0 auto 48px;
+        }
+
+        .paste-zone label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .paste-zone textarea {
+            width: 100%;
+            height: 120px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            padding: 16px;
+            resize: vertical;
+        }
+
+        .paste-zone textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .paste-zone .hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .paste-zone .hint code {
+            background: var(--bg-card);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+        }
+
+        /* ─── Dashboard ─── */
+        #dashboard {
+            display: none;
+        }
+
+        #dashboard.active {
+            display: block;
+        }
+
+        .dash-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .dash-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .dash-meta {
+            display: flex;
+            gap: 16px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 24px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .stat-icon {
+            font-size: 1.3rem;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #e8d591);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .tab {
+            padding: 8px 20px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-family: var(--font);
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: #111;
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Role Cards */
+        .role-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+
+        .role-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .role-card:hover {
+            border-color: var(--purple);
+            background: var(--bg-card-hover);
+        }
+
+        .role-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .role-name {
+            font-weight: 700;
+            text-transform: capitalize;
+            font-size: 1.05rem;
+        }
+
+        .role-badge {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: var(--purple-glow);
+            color: var(--info);
+            border: 1px solid rgba(108, 92, 231, 0.3);
+        }
+
+        .role-l0 {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+            margin-bottom: 10px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            -webkit-box-orient: vertical;
+            word-break: break-word;
+        }
+
+        .role-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Timeline */
+        .timeline {
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--accent), var(--border));
+        }
+
+        .tl-item {
+            position: relative;
+            margin-bottom: 14px;
+            padding: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+
+        .tl-item:hover {
+            border-color: var(--accent);
+        }
+
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 22px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: 2px solid var(--bg);
+        }
+
+        .tl-date {
+            font-size: 0.8rem;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .tl-title {
+            font-size: 0.9rem;
+            color: var(--text);
+            margin: 4px 0;
+        }
+
+        .tl-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 16px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            margin-top: 48px;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* ─── Expandable Role Cards ─── */
+        .role-card {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .role-card .expand-icon {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.3s;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .role-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .role-expanded {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .role-card.expanded .role-expanded {
+            max-height: 600px;
+            opacity: 1;
+            margin-top: 14px;
+        }
+
+        .role-expanded pre {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .role-section-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 10px 0 4px;
+            display: block;
+        }
+
+        /* ─── Skills Tab ─── */
+        .skills-search {
+            width: 100%;
+            padding: 10px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 0.85rem;
+            margin-bottom: 20px;
+            transition: border-color 0.2s;
+        }
+
+        .skills-search:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .skills-search::placeholder {
+            color: var(--text-muted);
+        }
+
+        .skill-category {
+            margin-bottom: 24px;
+        }
+
+        .skill-category-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .skill-tier {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .tier-core {
+            background: rgba(116, 185, 255, 0.15);
+            color: #74b9ff;
+        }
+
+        .tier-toolkit {
+            background: rgba(0, 184, 148, 0.15);
+            color: #00b894;
+        }
+
+        .tier-ecosystem {
+            background: rgba(253, 203, 110, 0.15);
+            color: #fdcb6e;
+        }
+
+        .skill-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .skill-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .skill-item:hover {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .skill-item .skill-name {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .skill-desc {
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: max-height 0.3s ease, opacity 0.3s, margin 0.3s;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-top: 0;
+        }
+
+        .skill-item.expanded .skill-desc {
+            max-height: 100px;
+            opacity: 1;
+            margin-top: 6px;
+        }
+
+        .skill-item.expanded {
+            border-color: var(--accent);
+        }
+
+        /* ─── Memory Preview ─── */
+        .tl-item {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .tl-item .expand-icon {
+            position: absolute;
+            right: 14px;
+            top: 14px;
+            width: 16px;
+            height: 16px;
+            transition: transform 0.3s;
+            color: var(--text-muted);
+        }
+
+        .tl-item.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .tl-expanded {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .tl-item.expanded .tl-expanded {
+            max-height: 400px;
+            opacity: 1;
+            margin-top: 10px;
+        }
+
+        .tl-expanded pre {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* ─── Health Section ─── */
+        .health-section {
+            margin-bottom: 32px;
+        }
+
+        .health-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .gauge-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .gauge-ring {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: conic-gradient(var(--success) 0%, var(--success) 40%, var(--warning) 40%, var(--warning) 80%, var(--danger) 80%, var(--danger) 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .gauge-ring::before {
+            content: '';
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: var(--bg-card);
+            border-radius: 50%;
+        }
+
+        .gauge-value {
+            position: relative;
+            z-index: 1;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .health-stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            text-align: center;
+        }
+
+        .health-stat .stat-label {
+            margin-top: 8px;
+        }
+
+        .bar-chart {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+
+        .bar-chart-title {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .bar-chart-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 100px;
+        }
+
+        .bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .bar {
+            width: 100%;
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            background: linear-gradient(to top, var(--purple), var(--accent));
+            transition: height 0.6s ease;
+        }
+
+        .bar-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        /* ─── Kanban Board (Directives) ─── */
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .kanban-col {
+            background: rgba(17, 17, 25, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .kanban-col-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 8px;
+        }
+
+        .kanban-col:nth-child(1) .kanban-col-header {
+            border-bottom-color: rgba(253, 203, 110, 0.3);
+        }
+
+        .kanban-col:nth-child(2) .kanban-col-header {
+            border-bottom-color: rgba(9, 132, 227, 0.3);
+        }
+
+        .kanban-col:nth-child(3) .kanban-col-header {
+            border-bottom-color: rgba(0, 184, 148, 0.3);
+        }
+
+        .kanban-count {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .directive-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-left: 3px solid;
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            transition: all 0.2s;
+            cursor: default;
+        }
+
+        .directive-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border-right-color: var(--accent);
+            border-top-color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .directive-pending {
+            border-left-color: #fdcb6e;
+        }
+
+        .directive-active {
+            border-left-color: #0984e3;
+        }
+
+        .directive-done {
+            border-left-color: #00b894;
+            opacity: 0.7;
+        }
+
+        .directive-done:hover {
+            opacity: 1;
+        }
+
+        .directive-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .directive-source {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+
+        .directive-text {
+            font-size: 0.85rem;
+            color: var(--text);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .directive-date {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            text-align: right;
+            border-top: 1px dashed var(--border);
+            padding-top: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .kanban-board {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate {
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .upload-zone {
+                padding: 32px 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .role-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .health-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .skill-list {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+        }
+
+        /* ─── Modal (Node Drill-Down) ─── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            width: 600px;
+            max-width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .modal-close:hover {
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .modal-section {
+            margin-bottom: 20px;
+        }
+
+        .modal-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 4px;
+        }
+
+        /* ─── Live Indicator ─── */
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 6px rgba(0, 184, 148, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0);
+            }
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            margin-left: auto;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #00b894;
+            border-radius: 50%;
+        }
+
+        .live-dot.active {
+            animation: pulse 2s infinite;
+        }
+
+        .live-text {
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- MUSE 3D Particle Background -->
+    <div id="particle-container"
+        style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:0.6;"></div>
+
+    <!-- Nav -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="./" class="nav-logo">
+                <img src="https://raw.githubusercontent.com/myths-labs/muse/main/assets/logo.png" alt="MUSE" width="28"
+                    height="28">
+                <span>MUSE</span>
+            </a>
+            <div class="nav-links">
+                <a href="./">Home</a>
+                <a href="./#features">Features</a>
+                <a href="https://github.com/myths-labs/muse" class="btn-sm" target="_blank" rel="noopener">
+                    ⭐ GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header" id="upload-section">
+            <h1>Your MUSE Dashboard</h1>
+            <p>Load your project files and see a personalized visualization of your AI memory, roles, and skills.</p>
+            <div class="privacy-badge">🔒 100% client-side — your data never leaves your browser</div>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="upload-zone">
+            <div class="icon">📂</div>
+            <h3>Load your MUSE project</h3>
+            <p>Select your project folder or drag & drop files</p>
+            <div class="upload-actions">
+                <button class="btn-upload btn-primary" id="btn-folder">📁 Select Project Folder</button>
+                <button class="btn-upload btn-secondary" id="btn-files">📄 Select Individual Files</button>
+            </div>
+        </div>
+
+        <div class="or-divider">or paste command output</div>
+
+        <!-- Paste Zone -->
+        <div class="paste-zone">
+            <label>Run this in your MUSE project, then paste the output below:</label>
+            <div style="position:relative">
+                <textarea id="paste-input" placeholder='Paste the JSON output from the command here...'></textarea>
+            </div>
+            <div class="hint">
+                Run: <code>./scripts/dashboard.sh --json</code> &nbsp;or&nbsp; manually paste your
+                <code>.muse/*.md</code> file contents
+            </div>
+            <div style="margin-top:12px; text-align:center">
+                <button class="btn-upload btn-primary" id="btn-parse" style="padding:8px 32px">Load Dashboard →</button>
+            </div>
+        </div>
+
+        <!-- Demo Button -->
+        <div style="text-align:center; margin-bottom:48px">
+            <button class="btn-upload btn-secondary" id="btn-demo" style="font-size:0.85rem">
+                🎯 Try with Demo Data
+            </button>
+        </div>
+
+        <!-- Dashboard (hidden until data loaded) -->
+        <div id="dashboard">
+            <div class="dash-header">
+                <div style="display:flex; align-items:center; gap:16px; width:100%;">
+                    <h2 id="dash-title" style="margin:0;">📊 Dashboard</h2>
+                    <div id="live-status" class="live-indicator" style="display:none;">
+                        <div class="live-dot active"></div>
+                        <span class="live-text">LIVE AUTO-REFRESH</span>
+                    </div>
+                </div>
+                <div class="dash-meta">
+                    <span id="dash-project"></span>
+                    <span id="dash-date"></span>
+                </div>
+            </div>
+
+            <div class="stats-grid" id="stats-grid"></div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="roles">🎭 Roles</button>
+                <button class="tab" data-tab="skills">⚡ Skills</button>
+                <button class="tab" data-tab="memory">🧠 Memory</button>
+                <button class="tab" data-tab="constellation">✨ Constellation</button>
+                <button class="tab" data-tab="health">📈 Health</button>
+                <button class="tab" data-tab="directives">📡 Directives</button>
+                <button class="tab" data-tab="topology">🕸 Topology</button>
+            </div>
+
+            <div class="tab-content active" id="tab-roles">
+                <div class="role-grid" id="role-grid"></div>
+            </div>
+
+            <div class="tab-content" id="tab-skills">
+                <input type="text" class="skills-search" id="skills-search" placeholder="Search skills...">
+                <div id="skills-container"></div>
+            </div>
+
+            <div class="tab-content" id="tab-memory">
+                <div class="timeline" id="timeline"></div>
+            </div>
+
+            <div class="tab-content" id="tab-health">
+                <div class="health-section" id="health-section"></div>
+            </div>
+
+            <div class="tab-content" id="tab-constellation">
+                <div id="constellation-container"
+                    style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:40px;min-height:500px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    <h3 style="margin-bottom:20px;color:var(--accent);">Semantic Knowledge Mapping</h3>
+                    <div id="constellation-viz"
+                        style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;"></div>
+                </div>
+                <p style="text-align:center;font-size:0.8rem;color:var(--text-dim);margin-top:16px;">
+                    This visualization represents key concepts and decisions extracted from your long-term memory.
+                </p>
+            </div>
+
+            <div class="tab-content" id="tab-directives">
+                <div class="directive-list" id="directive-list"></div>
+            </div>
+
+            <div class="tab-content" id="tab-topology">
+                <div id="topology-container"
+                    style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:40px;min-height:500px;display:flex;justify-content:center;align-items:center;">
+                    <p style="color:var(--text-muted)">Generating AI Flow Topology...</p>
+                </div>
+                <p style="text-align:center;font-size:0.8rem;color:var(--text-dim);margin-top:16px;">
+                    This dynamic Directed Acyclic Graph (DAG) visualizes communication paths across specialized agents.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Node Modal -->
+    <div class="modal-overlay" id="node-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">🎭 Agent Details</div>
+                <button class="modal-close"
+                    onclick="document.getElementById('node-modal').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-content">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+
+    <div class="footer">
+
+        <div class="footer">
+            <p>🎭 MUSE — The AI Coding Governance System</p>
+            <p><a href="https://github.com/myths-labs/muse">GitHub</a> · <a href="./">Home</a> · MIT © <a
+                    href="https://github.com/myths-labs">Myths Labs</a></p>
+        </div>
+
+        <script>
+            // ─── File System Access API ───
+            const btnFolder = document.getElementById('btn-folder');
+            const btnFiles = document.getElementById('btn-files');
+            const btnParse = document.getElementById('btn-parse');
+            const btnDemo = document.getElementById('btn-demo');
+            const pasteInput = document.getElementById('paste-input');
+            const liveStatus = document.getElementById('live-status');
+
+            let pollingInterval = null;
+            let currentDirHandle = null;
+
+            function stopPolling() {
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+                liveStatus.style.display = 'none';
+            }
+
+            async function startPolling(dirHandle) {
+                stopPolling();
+                currentDirHandle = dirHandle;
+                liveStatus.style.display = 'inline-flex';
+
+                // Poll every 15 seconds
+                pollingInterval = setInterval(async () => {
+                    try {
+                        // Check if we still have permission
+                        const status = await dirHandle.queryPermission({ mode: 'read' });
+                        if (status === 'granted') {
+                            const data = await readProjectFromDirectory(dirHandle);
+                            renderDashboard(data, true); // true indicates it's a silent refresh
+                        } else {
+                            stopPolling();
+                        }
+                    } catch (e) {
+                        console.error("Polling error:", e);
+                        stopPolling();
+                    }
+                }, 15000);
+            }
+
+            // Select folder (modern browsers)
+            btnFolder.addEventListener('click', async () => {
+                try {
+                    if (!('showDirectoryPicker' in window)) {
+                        alert('Your browser doesn\'t support folder selection. Please use Chrome, Edge, or paste the command output instead.');
+                        return;
+                    }
+                    const dirHandle = await window.showDirectoryPicker();
+                    const data = await readProjectFromDirectory(dirHandle);
+                    renderDashboard(data);
+                    startPolling(dirHandle);
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                }
+            });
+
+            // Select individual files
+            btnFiles.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.accept = '.md';
+                input.webkitdirectory = true;
+                input.addEventListener('change', async (e) => {
+                    const files = Array.from(e.target.files);
+                    const data = await readProjectFromFileList(files);
+                    stopPolling();
+                    renderDashboard(data);
+                });
+                input.click();
+            });
+
+            // Parse pasted content
+            btnParse.addEventListener('click', () => {
+                const text = pasteInput.value.trim();
+                if (!text) return;
+                try {
+                    const data = JSON.parse(text);
+                    stopPolling();
+                    renderDashboard(data);
+                } catch {
+                    // Try parsing as raw markdown content
+                    const data = parseRawContent(text);
+                    stopPolling();
+                    renderDashboard(data);
+                }
+            });
+
+            // Demo data
+            btnDemo.addEventListener('click', () => {
+                stopPolling();
+                renderDashboard({
+                    project: 'my-awesome-project',
+                    roles: [
+                        {
+                            name: 'STRATEGY', l0: 'Product Owner & Architect. Approves ACs, guides L0 protocol evolution, and manages the PRD.', lines: 145, modified: '2026-03-17',
+                            content: '## 🎯 Core Directive\n- You are the Product Manager and Strategy Architect.\n- Define the MVP scope and ensure alignment with the overarching goal.\n\n## 📋 Current Focus\n- [ ] Finalize the Dashboard v3 specs\n- [x] Review Auth module ACs\n- [ ] Plan Q2 roadmap'
+                        },
+                        {
+                            name: 'BUILD', l0: 'v3.2.0 | S116 ✅ 10-tool 跨平台兼容 + S118 Digital Twin | 65 skills', lines: 772, modified: '2026-04-10',
+                            content: '## 📐 Responsibilities\n- Framework code development\n- setup.sh / install.sh maintenance\n- Skill & Workflow development\n- Bug fixes & architecture\n\n## ⏳ TODO (by priority)\n- [x] S116: 10-tool cross-platform (L1 spec + L2 adapters + L3 dispatch)\n- [x] S118: Digital Twin Profile restore\n- [x] S117: BUG-MUSE-06 absolute memory path\n- [ ] S096: MUSE Automation Phase 1 (P2)\n- [ ] Phase 2 skill expansion (design-motion, better-icons)'
+                        },
+                        {
+                            name: 'QA', l0: 'Latest QA: v3.0.2 S092 OpenCode — 7/7 AC + 3/3 EP PASS', lines: 210, modified: '2026-04-02',
+                            content: '## Latest QA Results\n✅ 7/7 AC + 3/3 EP PASS — S092 OpenCode Compat (v3.0.2)\nVerifier: QA identity (independent session)\nBuild: v3.0.2 / main\n\n## Historical\n- v2.15.0 MCP Server: 10/10 PASS\n- v2.14.0 Skills: 15/15 PASS\n- v2.12.0 Core: 10/10 PASS'
+                        },
+                        {
+                            name: 'GROWTH', l0: 'v3.2.0 ✅ Released | 65 skills | 10 tools | 官网已同步', lines: 450, modified: '2026-04-10',
+                            content: '## 📊 Distribution\n- GitHub: myths-labs/muse\n- Landing: muse.mythslabs.ai\n- Dashboard: muse.mythslabs.ai/dashboard\n\n## 📋 Content Pipeline\n- [x] v3.0 visual asset overhaul (before-after/demo.webp/architecture)\n- [x] XHS v3 story-driven post\n- [x] X OpenCode post\n- [ ] v3.2.0 cross-platform announcement\n- [ ] S063 Supermemory absorption post'
+                        },
+                    ],
+                    memory: [
+                        {
+                            date: '2026-04-10', title: 'S116 Cross-Platform + S118 Digital Twin → v3.2.0', lines: 120, size: 6400,
+                            content: '## [BUILD] Session 1: S116+S118 → v3.2.0 Release\n\n### Completed\n- L1 CONVO_SPEC.md canonical format\n- L2 adapters: detect_tool + cc + aider + manual\n- L3 bye.md N-way dispatch (10 tools)\n- install.sh +3 platforms (copilot/aider/antigravity)\n- Portable paths (.muse/paths.md)\n- Digital Twin Step 3.7 restore\n\n### Decisions\n- S116 upgraded from P2→P1 (user pain point from AG→CC migration)'
+                        },
+                        {
+                            date: '2026-04-08', title: 'BUG-MUSE-04/05 SOP Bloat Paradox → v3.1.2', lines: 85, size: 4200,
+                            content: '## [BUILD] SOP Bloat Paradox Fix\n\n### Completed\n- bye.md 565→124 lines (78% reduction)\n- Checklist refresh replaces hardcoded %\n- resume.md Checklist fact-check\n\n### Decisions\n- Architecture principle: 减法 > 加法 — fix by changing data structures, not adding more SOP'
+                        },
+                        {
+                            date: '2026-04-03', title: 'Growth: README Visual Assets + Social Posts', lines: 90, size: 4500,
+                            content: '## [Growth] Visual Asset Overhaul\n\n### Completed\n- before-after.png EN/CN remade (v3.0/65 skills)\n- demo.webp remade (40 frames, 224KB)\n- Architecture Mermaid updated (6 layers)\n- XHS v3 story-driven post + X OpenCode post\n\n### User Feedback\n- Story-driven > feature list for social posts'
+                        },
+                        { date: '2026-04-02', title: 'S092 OpenCode Compat → v3.0.2 + QA PASS', lines: 65, size: 3200 },
+                        { date: '2026-03-25', title: 'v2.33 Static/Dynamic User Profile + Skill Expansion', lines: 55, size: 2800 },
+                    ],
+                    skills: [
+                        { name: 'verification-before-completion', tier: 'core', description: 'Evidence before assertions — AC-first workflow, pre-flight fast-fail, Judge verdicts.' },
+                        { name: 'context-health-check', tier: 'core', description: 'Context window health check (/ctx). Evaluates consumption, recommends new conversation.' },
+                        { name: 'layered-context', tier: 'core', description: 'L0/L1/L2 progressive context loading — scan summaries first, deep-read on demand.' },
+                        { name: 'agent-protocol', tier: 'core', description: 'Machine-readable role file protocol for multi-agent communication and MCP integration.' },
+                        { name: 'semantic-search', tier: 'core', description: 'Zero-dependency TF-IDF search across MUSE memory, roles, and skills.' },
+                        { name: 'using-superpowers', tier: 'core', description: 'Establishes how to find and use skills — Skill tool invocation before ANY response.' },
+                        { name: 'strategic-compact', tier: 'core', description: 'Manual context compaction at logical intervals to preserve focus through task phases.' },
+                        { name: 'coordinator-mode', tier: 'toolkit', description: 'Multi-agent coordination SOP — synthesis iron law, 4-stage workflow, Continue/Spawn matrix.' },
+                        { name: 'systematic-debugging', tier: 'toolkit', description: '4-phase root cause process + L1→L4 pressure escalation + passive behavior detection.' },
+                        { name: 'git-commit', tier: 'toolkit', description: 'Conventional Commits with type/scope/subject. Handles branch and merge commits.' },
+                        { name: 'brainstorming', tier: 'toolkit', description: 'Reframes problems, challenges 3 assumptions, outputs design doc for downstream skills.' },
+                        { name: 'deep-dive', tier: 'toolkit', description: '2-stage pipeline: trace (causal investigation) → deep-interview (requirements crystallization).' },
+                        { name: 'dispatching-parallel-agents', tier: 'toolkit', description: 'Run multiple subagents concurrently on independent tasks with self-contained prompts.' },
+                        { name: 'iterative-retrieval', tier: 'toolkit', description: 'Progressive context refinement replacing single-pass search for subagent accuracy.' },
+                        { name: 'creating-skills', tier: 'toolkit', description: 'Guide for creating SKILL.md following Anthropic best practices — structure, naming, quality.' },
+                        { name: 'frontend-design', tier: 'toolkit', description: 'Production-grade frontend interfaces with high design quality, avoiding generic AI aesthetics.' },
+                        { name: 'security-review', tier: 'toolkit', description: 'Comprehensive security checklist for auth, user input, secrets, API endpoints, payments.' },
+                        { name: 'vercel-react-best-practices', tier: 'ecosystem', description: 'React/Next.js performance optimization from Vercel Engineering.' },
+                        { name: 'expo-app-design', tier: 'ecosystem', description: 'Cross-platform mobile apps with Expo Router, NativeWind, and React Native.' },
+                        { name: 'database-reviewer', tier: 'ecosystem', description: 'PostgreSQL specialist — query optimization, schema design, security, Supabase patterns.' },
+                    ],
+                    directives: [
+                        { text: 'S116: 10-tool cross-platform compatibility (L1 spec + L2 adapters + L3 dispatch)', status: 'done', source: 'STRATEGY→BUILD', date: '2026-04-10' },
+                        { text: 'S118: Digital Twin Profile restore + full-role upgrade', status: 'done', source: 'STRATEGY→BUILD', date: '2026-04-10' },
+                        { text: 'S117: BUG-MUSE-06 absolute memory path + Vault sync + /release workflow', status: 'done', source: 'STRATEGY→BUILD', date: '2026-04-10' },
+                        { text: 'S096: MUSE Automation Phase 1 (auto-bye + checkpoint + auto-distill)', status: 'pending', source: 'STRATEGY→BUILD', date: '2026-04-08' },
+                    ],
+                    skillCount: 65,
+                    memoriesWords: 2800,
+                    constellation: [
+                        { word: 'Governance', count: 18 },
+                        { word: 'Cross-Platform', count: 14 },
+                        { word: 'Memory', count: 16 },
+                        { word: 'Multi-Agent', count: 11 },
+                        { word: 'Security', count: 10 },
+                        { word: 'Markdown', count: 13 },
+                        { word: 'SOP', count: 9 },
+                        { word: 'Debugging', count: 7 },
+                        { word: 'Skill', count: 15 },
+                        { word: 'Context', count: 12 },
+                        { word: 'Deployment', count: 8 },
+                        { word: 'Sync', count: 10 },
+                        { word: 'Digital Twin', count: 6 },
+                        { word: 'Automation', count: 7 }
+                    ]
+                });
+            });
+
+            // ─── Read from Directory Handle (File System Access API) ───
+            async function readProjectFromDirectory(dirHandle) {
+                const data = { project: dirHandle.name, roles: [], memory: [], skills: [], directives: [], constellation: [], skillCount: 0, memoriesWords: 0 };
+
+                // Read .muse/ directory
+                try {
+                    const museDir = await dirHandle.getDirectoryHandle('.muse');
+                    for await (const [name, handle] of museDir.entries()) {
+                        if (handle.kind === 'file' && name.endsWith('.md')) {
+                            const file = await handle.getFile();
+                            const content = await file.text();
+                            const lines = content.split('\n');
+                            const l0 = lines[0]?.replace('<!-- L0: ', '').replace(' -->', '') || '';
+                            data.roles.push({
+                                name: name.replace('.md', ''),
+                                l0: l0.substring(0, 200),
+                                lines: lines.length,
+                                modified: new Date(file.lastModified).toISOString().split('T')[0],
+                                content: extractSections(content)
+                            });
+                            // Extract directives from 📡 sections
+                            extractDirectives(content, name.replace('.md', ''), data.directives);
+                        }
+                    }
+                } catch { }
+
+                // Read memory/ directory
+                try {
+                    const memDir = await dirHandle.getDirectoryHandle('memory');
+                    for await (const [name, handle] of memDir.entries()) {
+                        if (handle.kind === 'file' && name.endsWith('.md')) {
+                            const file = await handle.getFile();
+                            const content = await file.text();
+                            const firstHeading = content.split('\n').find(l => l.startsWith('#'))?.replace(/^#+\s*/, '') || '';
+                            data.memory.push({
+                                date: name.replace('.md', ''),
+                                title: firstHeading.substring(0, 80),
+                                lines: content.split('\n').length,
+                                size: file.size,
+                                content: content.split('\n').slice(0, 12).join('\n')
+                            });
+                        }
+                    }
+                    data.memory.sort((a, b) => b.date.localeCompare(a.date));
+                } catch { }
+
+                // Read skills with tiers + descriptions
+                const readSkillsFromDir = async (dir, tier) => {
+                    for await (const [name, handle] of dir.entries()) {
+                        if (handle.kind === 'directory') {
+                            try {
+                                const skillFile = await handle.getFileHandle('SKILL.md');
+                                const file = await skillFile.getFile();
+                                const content = await file.text();
+                                // Parse description from YAML frontmatter
+                                let desc = '';
+                                const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+                                if (fmMatch) {
+                                    const descLine = fmMatch[1].split('\n').find(l => l.startsWith('description:'));
+                                    if (descLine) desc = descLine.replace(/^description:\s*/, '').replace(/^['"]|['"]$/g, '');
+                                }
+                                if (!desc) {
+                                    // Fallback: first non-empty line after frontmatter
+                                    const afterFm = content.replace(/^---[\s\S]*?---\s*\n?/, '');
+                                    desc = afterFm.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || '';
+                                }
+                                data.skills.push({ name, tier, description: desc.substring(0, 150) });
+                                data.skillCount++;
+                            } catch {
+                                await readSkillsFromDir(handle, tier);
+                            }
+                        }
+                    }
+                };
+                try {
+                    const skillsDir = await dirHandle.getDirectoryHandle('skills');
+                    for await (const [name, handle] of skillsDir.entries()) {
+                        if (handle.kind === 'directory') {
+                            const tier = name === 'core' ? 'core' : name === 'ecosystem' ? 'ecosystem' : 'toolkit';
+                            await readSkillsFromDir(handle, tier);
+                        }
+                    }
+                } catch { }
+                try {
+                    const agentDir = await dirHandle.getDirectoryHandle('.agent');
+                    const agentSkillsDir = await agentDir.getDirectoryHandle('skills');
+                    await readSkillsFromDir(agentSkillsDir, 'toolkit');
+                } catch { }
+
+                // Read MEMORIES.md
+                try {
+                    const memFile = await (await dirHandle.getFileHandle('MEMORIES.md')).getFile();
+                    const content = await memFile.text();
+                    data.memoriesWords = content.split(/\s+/).length;
+                    data.constellation = extractConstellationNodes(content);
+                } catch { }
+
+                return data;
+            }
+
+            // ─── Read from File List (webkitdirectory) ───
+            async function readProjectFromFileList(files) {
+                const data = { project: '', roles: [], memory: [], skills: [], directives: [], constellation: [], skillCount: 0, memoriesWords: 0 };
+
+                for (const file of files) {
+                    const path = file.webkitRelativePath || file.name;
+                    if (!data.project) data.project = path.split('/')[0];
+
+                    if (path.includes('.muse/') && file.name.endsWith('.md')) {
+                        const content = await file.text();
+                        const lines = content.split('\n');
+                        const l0 = lines[0]?.replace('<!-- L0: ', '').replace(' -->', '') || '';
+                        data.roles.push({
+                            name: file.name.replace('.md', ''),
+                            l0: l0.substring(0, 200), lines: lines.length,
+                            modified: new Date(file.lastModified).toISOString().split('T')[0],
+                            content: extractSections(content)
+                        });
+                        extractDirectives(content, file.name.replace('.md', ''), data.directives);
+                    }
+
+                    if (path.includes('memory/') && file.name.endsWith('.md') && !path.includes('.muse/')) {
+                        const content = await file.text();
+                        const firstHeading = content.split('\n').find(l => l.startsWith('#'))?.replace(/^#+\s*/, '') || '';
+                        data.memory.push({
+                            date: file.name.replace('.md', ''),
+                            title: firstHeading.substring(0, 80), lines: content.split('\n').length, size: file.size,
+                            content: content.split('\n').slice(0, 12).join('\n')
+                        });
+                    }
+
+                    if (file.name === 'SKILL.md') {
+                        data.skillCount++;
+                        const tier = path.includes('/core/') ? 'core' : path.includes('/ecosystem/') ? 'ecosystem' : 'toolkit';
+                        const parts = path.split('/');
+                        const skillName = parts[parts.length - 2] || 'unknown';
+                        const content = await file.text();
+                        let desc = '';
+                        const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+                        if (fmMatch) {
+                            const descLine = fmMatch[1].split('\n').find(l => l.startsWith('description:'));
+                            if (descLine) desc = descLine.replace(/^description:\s*/, '').replace(/^['"]|['"]$/g, '');
+                        }
+                        data.skills.push({ name: skillName, tier, description: desc.substring(0, 150) });
+                    }
+
+                    if (file.name === 'MEMORIES.md' && !path.includes('.muse/')) {
+                        const content = await file.text();
+                        data.memoriesWords = content.split(/\s+/).length;
+                        data.constellation = extractConstellationNodes(content);
+                    }
+                }
+
+                data.memory.sort((a, b) => b.date.localeCompare(a.date));
+                return data;
+            }
+
+            // ─── Helper: Extract key sections from a role file ───
+            function extractSections(content) {
+                const lines = content.split('\n');
+                const sections = [];
+                let current = null;
+                for (const line of lines.slice(1)) { // skip L0
+                    if (line.startsWith('## ')) {
+                        if (current) sections.push(current);
+                        current = { title: line.replace(/^##\s*/, ''), lines: [] };
+                    } else if (current && current.lines.length < 8) {
+                        if (line.trim()) current.lines.push(line);
+                    }
+                }
+                if (current) sections.push(current);
+                // Return first 3 most interesting sections
+                return sections.slice(0, 4).map(s => s.title + '\n' + s.lines.join('\n')).join('\n\n');
+            }
+
+            // ─── Helper: Extract directives from 📡 sections ───
+            function extractDirectives(content, roleName, directives) {
+                const lines = content.split('\n');
+                for (const line of lines) {
+                    if (line.includes('📡') && (line.startsWith('#') || line.startsWith('>'))) {
+                        // Detect status icon
+                        let status = 'pending';
+                        if (line.includes('✅')) status = 'done';
+                        else if (line.includes('🔄') || line.includes('处理中')) status = 'active';
+
+                        const dateMatch = line.match(/\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}/);
+                        const sourceMatch = line.match(/([a-zA-Z0-9_]+→[a-zA-Z0-9_]+)/);
+                        const textMatch = line.replace(/^[#>\s*]+/, '').replace(/📡|🟡|✅|🔄|待接收|已接收|已完成/g, '').trim();
+
+                        if (textMatch.length > 5) {
+                            directives.push({
+                                text: textMatch.substring(0, 140),
+                                status: status,
+                                source: sourceMatch ? sourceMatch[1].toUpperCase() : roleName.toUpperCase(),
+                                date: dateMatch ? dateMatch[0] : ''
+                            });
+                        }
+                    }
+                }
+            }
+
+            // ─── Parse raw text content ───
+            function parseRawContent(text) {
+                return {
+                    project: 'My Project',
+                    roles: [{ name: 'pasted', l0: text.substring(0, 200), lines: text.split('\n').length, modified: new Date().toISOString().split('T')[0], content: text.substring(0, 500) }],
+                    memory: [], skills: [], directives: [], skillCount: 0, memoriesWords: text.split(/\s+/).length
+                };
+            }
+
+            // ─── Render Dashboard ───
+            function renderDashboard(data, isSilent = false) {
+                document.getElementById('upload-section').style.display = 'none';
+                document.querySelector('.upload-zone').style.display = 'none';
+                document.querySelector('.or-divider').style.display = 'none';
+                document.querySelector('.paste-zone').style.display = 'none';
+                window.currentProjectData = null;
+
+                window.currentProjectData = data;
+                const dash = document.getElementById('dashboard');
+                if (dash.style.display !== 'block') {
+                    dash.style.display = 'block';
+                    if (!isSilent) {
+                        dash.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+                document.getElementById('dash-title').textContent = data.project || 'Dashboard';
+                document.getElementById('dash-project').textContent = data.project || '';
+                document.getElementById('dash-date').textContent = new Date().toLocaleDateString();
+
+                // Compute last active
+                const lastActive = data.memory?.length ? timeAgo(data.memory[0].date) : 'N/A';
+
+                // Stats (5 cards)
+                const stats = [
+                    { icon: '🎭', value: data.roles?.length || 0, label: 'Active Roles' },
+                    { icon: '🧠', value: data.memory?.length || 0, label: 'Memory Files' },
+                    { icon: '⚡', value: data.skillCount || 0, label: 'Skills' },
+                    { icon: '📚', value: data.memoriesWords || 0, label: 'Words (Long-term)' },
+                    { icon: '🕐', value: lastActive, label: 'Last Active', isText: true },
+                ];
+                document.getElementById('stats-grid').innerHTML = stats.map(s => `
+        <div class="stat-card animate">
+          <div class="stat-icon">${s.icon}</div>
+          <div class="stat-value" ${s.isText ? 'style="font-size:1.3rem"' : ''}>${s.isText ? s.value : s.value.toLocaleString()}</div>
+          <div class="stat-label">${s.label}</div>
+        </div>
+      `).join('');
+
+                renderConstellation(data.constellation);
+
+
+                function renderConstellation(nodes) {
+                    const container = document.getElementById('constellation-viz');
+                    if (!nodes || nodes.length === 0) {
+                        container.innerHTML = '<p style="color:var(--text-muted)">No semantic data found in MEMORIES.md.</p>';
+                        return;
+                    }
+                    const maxCount = Math.max(...nodes.map(n => n.count));
+                    const minCount = Math.min(...nodes.map(n => n.count));
+                    container.innerHTML = nodes.map(n => {
+                        const size = 0.8 + (1.2 * (n.count - minCount) / (maxCount - minCount || 1));
+                        const opacity = 0.4 + (0.6 * (n.count - minCount) / (maxCount - minCount || 1));
+                        return `<span style="font-size:${size}rem; opacity:${opacity}; color:var(--accent); cursor:help;" title="Found ${n.count} times">${esc(n.word)}</span>`;
+                    }).join(' ');
+                }
+
+                function extractConstellationNodes(content) {
+                    const lines = content.split('\n');
+                    const keywords = new Map();
+                    const stopwords = new Set(['about', 'after', 'again', 'could', 'should', 'would', 'there', 'their', 'which',
+                        'these', 'those', 'other', 'where', 'while', 'being', 'under', 'above', 'below', 'between',
+                        'through', 'before', 'during', 'without', 'within', 'along', 'inside', 'outside',
+                        'source', 'memory', 'auto-captured', 'auto', 'from', 'into', 'with', 'have', 'been',
+                        'that', 'this', 'what', 'when', 'only', 'also', 'more', 'most', 'than', 'just', 'very']);
+                    lines.forEach(line => {
+                        // Match [FACT], [DECISION], [LESSON] with optional bold (**) and bullet (- ) prefix
+                        // Real format: - **[FACT] text** (source: memory/...)
+                        const match = line.match(/\*{0,2}\[(FACT|DECISION|LESSON)\]\s*(.*?)(?:\*{2})?\s*(?:\(source:.*)?$/);
+                        if (match) {
+                            const text = match[2];
+                            const words = text.split(/[\s,.;:!?()\[\]{}|/\\\u2192\u2190\u2194=+]+/).filter(w => w.length > 3);
+                            words.forEach(word => {
+                                const clean = word.replace(/[\*\`\~\#'\u201c\u201d\u2014\u2013""]/g, '').trim();
+                                if (clean && clean.length > 3 && !stopwords.has(clean.toLowerCase())) {
+                                    keywords.set(clean, (keywords.get(clean) || 0) + 1);
+                                }
+                            });
+                        }
+                    });
+                    const sorted = Array.from(keywords.entries()).sort((a, b) => b[1] - a[1]).slice(0, 50);
+                    return sorted.map(([word, count]) => ({ word, count }));
+                }
+
+                // ─── Roles (expandable) ───
+                const chevronSvg = '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+                document.getElementById('role-grid').innerHTML = (data.roles || []).map((r, i) => `
+        <div class="role-card animate" onclick="this.classList.toggle('expanded')" id="role-${i}">
+          <div class="role-header">
+            <span class="role-name">${esc(r.name)}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="role-badge">${r.lines} lines</span>
+              ${chevronSvg}
+            </div>
+          </div>
+          <div class="role-l0">${esc(r.l0 || 'No L0 summary')}</div>
+          <div class="role-meta">📅 ${esc(r.modified || '')}</div>
+          <div class="role-expanded">
+            <span class="role-section-label">Key Sections</span>
+            <pre>${esc(r.content || 'No content preview available')}</pre>
+          </div>
+        </div>
+      `).join('') || '<p style="color:var(--text-muted)">No role files found</p>';
+
+                // ─── Skills (categorized) ───
+                const skillsByTier = { core: [], toolkit: [], ecosystem: [] };
+                (data.skills || []).forEach(s => {
+                    if (skillsByTier[s.tier]) skillsByTier[s.tier].push(s);
+                    else skillsByTier.toolkit.push(s);
+                });
+                const tierMeta = {
+                    core: { emoji: '🔵', label: 'Core', cls: 'tier-core' },
+                    toolkit: { emoji: '🟢', label: 'Toolkit', cls: 'tier-toolkit' },
+                    ecosystem: { emoji: '🟠', label: 'Ecosystem', cls: 'tier-ecosystem' }
+                };
+                window._allSkillsData = skillsByTier;
+                renderSkills(skillsByTier);
+
+                document.getElementById('skills-search').addEventListener('input', (e) => {
+                    const q = e.target.value.toLowerCase();
+                    const filtered = {};
+                    for (const [tier, skills] of Object.entries(window._allSkillsData)) {
+                        filtered[tier] = skills.filter(s => s.name.toLowerCase().includes(q));
+                    }
+                    renderSkills(filtered);
+                });
+
+                function renderSkills(byTier) {
+                    let html = '';
+                    for (const [tier, skills] of Object.entries(byTier)) {
+                        if (skills.length === 0) continue;
+                        const meta = tierMeta[tier];
+                        html += `<div class="skill-category">
+                    <div class="skill-category-header">
+                        ${meta.emoji} ${meta.label}
+                        <span class="skill-tier ${meta.cls}">${skills.length}</span>
+                    </div>
+                    <div class="skill-list">
+                        ${skills.map(s => `<div class="skill-item" onclick="this.classList.toggle('expanded')">
+                            <span class="skill-name">${esc(s.name)}</span>
+                            <div class="skill-desc">${esc(s.description || 'No description available')}</div>
+                        </div>`).join('')}
+                    </div>
+                </div>`;
+                    }
+                    document.getElementById('skills-container').innerHTML = html || '<p style="color:var(--text-muted)">No skills found</p>';
+                }
+
+                // ─── Memory (expandable) ───
+                document.getElementById('timeline').innerHTML = (data.memory || []).map((m, i) => `
+        <div class="tl-item animate" onclick="this.classList.toggle('expanded')" id="mem-${i}">
+          ${chevronSvg}
+          <div class="tl-date">${esc(m.date)}</div>
+          <div class="tl-title">${esc(m.title || 'Session notes')}</div>
+          <div class="tl-meta">
+            <span>${m.lines} lines</span>
+            <span>${(m.size / 1024).toFixed(1)} KB</span>
+          </div>
+          <div class="tl-expanded">
+            <pre>${esc(m.content || 'No preview available')}</pre>
+          </div>
+        </div>
+      `).join('') || '<p style="color:var(--text-muted)">No memory files found</p>';
+
+                // ─── Health ───
+                const memoryDates = (data.memory || []).map(m => ({ date: m.date, lines: m.lines }));
+                const last7 = memoryDates.slice(0, 7).reverse();
+                const maxLines = Math.max(...last7.map(m => m.lines), 1);
+                const totalLines = (data.memory || []).reduce((sum, m) => sum + m.lines, 0);
+                const avgLines = last7.length ? Math.round(totalLines / (data.memory?.length || 1)) : 0;
+                const totalKB = ((data.memory || []).reduce((sum, m) => sum + (m.size || 0), 0) / 1024).toFixed(1);
+
+                // Streak: count consecutive days from most recent
+                let streak = 0;
+                if (data.memory?.length) {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    for (let i = 0; i < data.memory.length; i++) {
+                        const d = new Date(data.memory[i].date + 'T00:00:00');
+                        const expected = new Date(today); expected.setDate(expected.getDate() - i);
+                        if (d.getTime() === expected.getTime()) streak++; else break;
+                    }
+                }
+
+                // Context Pressure Calculation (Token Burn)
+                const roleLines = (data.roles || []).reduce((sum, r) => sum + r.lines, 0);
+                const pressureLevel = roleLines < 400 ? 'Low' : roleLines < 800 ? 'Medium' : 'High';
+                const pressureColor = roleLines < 400 ? 'var(--success)' : roleLines < 800 ? 'var(--warning)' : 'var(--danger)';
+                const pressureDegree = Math.min((roleLines / 1000) * 360, 360);
+
+                document.getElementById('health-section').innerHTML = `
+        <div style="margin-bottom:20px">
+          <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Project Health Overview</h3>
+          <p style="font-size:0.85rem;color:var(--text-dim);line-height:1.6">Track your AI-assisted development activity. Monitor your session streaks, memory pipeline, and context window pressure to prevent AI hallucinations.</p>
+        </div>
+        <div class="health-grid animate">
+          
+          <div class="gauge-container">
+            <div class="gauge-ring" style="background: conic-gradient(${pressureColor} 0deg, ${pressureColor} ${pressureDegree}deg, var(--border) ${pressureDegree}deg, var(--border) 360deg);">
+                <div class="gauge-value" style="color:${pressureColor}">${roleLines}</div>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-dim);margin-top:8px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">Context Pressure</div>
+            <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted); line-height:1.4;">
+                Active Lines Loaded<br>
+                <strong style="color:${pressureColor}">${pressureLevel} Risk</strong>
+            </div>
+          </div>
+
+          <div class="health-stat">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-value" style="font-size:1.8rem">${streak}d</div>
+            <div class="stat-label">Active Streak</div>
+            <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;text-align:left;font-size:0.75rem;color:var(--text-muted);line-height:2">
+              <div style="display:flex;justify-content:space-between"><span>Last active</span><span style="color:var(--text)">${lastActive}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Total logs</span><span style="color:var(--text)">${data.memory?.length || 0}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Total memory</span><span style="color:var(--text)">${totalKB} KB</span></div>
+            </div>
+          </div>
+
+          <div class="bar-chart">
+            <div class="bar-chart-title">Memory Activity — lines written per session day</div>
+            <p style="font-size:0.72rem;color:var(--text-muted);margin:-10px 0 14px">Each bar = one day's memory log. Hover for exact line count.</p>
+            <div class="bar-chart-bars">
+              ${last7.map(m => `
+                <div class="bar-col">
+                  <div class="bar" style="height:${Math.max((m.lines / maxLines) * 100, 4)}px" title="${m.date}: ${m.lines} lines"></div>
+                  <div class="bar-label">${m.date.slice(-5)}</div>
+                </div>
+              `).join('')}
+              ${last7.length === 0 ? '<p style="color:var(--text-muted);margin:auto">No memory data yet — start a session!</p>' : ''}
+            </div>
+          </div>
+        </div>`;
+
+                // ─── Directives Kanban Board ───
+                const directives = data.directives || [];
+                const pending = directives.filter(d => d.status === 'pending');
+                const active = directives.filter(d => d.status === 'active');
+                const done = directives.filter(d => d.status === 'done');
+
+                const renderCard = (d) => `
+                <div class="directive-item animate directive-${d.status}">
+                  <div class="directive-header">
+                    <span class="directive-source">${esc(d.source)}</span>
+                  </div>
+                  <div class="directive-text">${esc(d.text)}</div>
+                  ${d.date ? `<div class="directive-date">${esc(d.date)}</div>` : ''}
+                </div>
+            `;
+
+                document.getElementById('directive-list').innerHTML = `
+                <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:16px;">Visual Kanban Board parsing 📡 directives directly from your role files.</p>
+                <div class="kanban-board">
+                    <div class="kanban-col">
+                        <div class="kanban-col-header">
+                            <div>🟡 Pending</div>
+                            <div class="kanban-count">${pending.length}</div>
+                        </div>
+                        ${pending.length ? pending.map(renderCard).join('') : '<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;margin-top:20px;">No pending directives</p>'}
+                    </div>
+                    
+                    <div class="kanban-col">
+                        <div class="kanban-col-header">
+                            <div>🔄 Active</div>
+                            <div class="kanban-count">${active.length}</div>
+                        </div>
+                        ${active.length ? active.map(renderCard).join('') : '<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;margin-top:20px;">No active directives</p>'}
+                    </div>
+                    
+                    <div class="kanban-col">
+                        <div class="kanban-col-header">
+                            <div>✅ Done</div>
+                            <div class="kanban-count">${done.length}</div>
+                        </div>
+                        ${done.length ? done.map(renderCard).join('') : '<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;margin-top:20px;">No completed directives</p>'}
+                    </div>
+                </div>
+            `;
+
+                // Tabs
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        tab.classList.add('active');
+                        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                    });
+                });
+
+                // Scroll to dashboard
+                dash.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                // ─── Render Topology DAG (P2 Mermaid) ───
+                renderTopology(data);
+            }
+
+            // Add dynamic loaded Mermaid
+            let mermaidLoaded = false;
+            async function renderTopology(data) {
+                const container = document.getElementById('topology-container');
+                container.style.display = 'block';
+                container.style.position = 'relative';
+                container.style.overflow = 'hidden';
+
+                // Normalize role names
+                function normalizeRoleName(name) {
+                    const cleaned = name.trim().toUpperCase();
+                    const parts = cleaned.split('/');
+                    return parts[parts.length - 1] || cleaned;
+                }
+
+                // Extract edges from Directives
+                const edges = new Map();
+                const nodeNames = new Set();
+
+                (data.directives || []).forEach(d => {
+                    const parts = d.source.split('\u2192');
+                    if (parts.length === 2) {
+                        const from = normalizeRoleName(parts[0]);
+                        const to = normalizeRoleName(parts[1]);
+                        if (from && to && from !== to) {
+                            nodeNames.add(from);
+                            nodeNames.add(to);
+                            const key = `${from}->${to}`;
+                            edges.set(key, (edges.get(key) || 0) + 1);
+                        }
+                    }
+                });
+
+                // Scan role content for cross-role → references
+                (data.roles || []).forEach(r => {
+                    const roleName = r.name.toUpperCase();
+                    nodeNames.add(roleName);
+                    const content = r.content || '';
+                    const crossRefPattern = /([A-Z][A-Z0-9_\/]*)\u2192([A-Z][A-Z0-9_\/]*)/g;
+                    let m;
+                    while ((m = crossRefPattern.exec(content)) !== null) {
+                        const from = normalizeRoleName(m[1]);
+                        const to = normalizeRoleName(m[2]);
+                        if (from && to && from !== to) {
+                            nodeNames.add(from);
+                            nodeNames.add(to);
+                            const key = `${from}->${to}`;
+                            if (!edges.has(key)) edges.set(key, 1);
+                        }
+                    }
+                });
+
+                const roleNameList = (data.roles || []).map(r => r.name.toUpperCase());
+                roleNameList.forEach(n => nodeNames.add(n));
+
+                if (nodeNames.size === 0) {
+                    container.innerHTML = '<p style="color:var(--text-muted)">Not enough role data to generate topology.</p>';
+                    return;
+                }
+
+                // ─── Pure HTML/Canvas Topology ───
+                const nodes = Array.from(nodeNames);
+                const padding = 60;
+                const nodeW = 140;
+                const nodeH = 50;
+                const containerW = container.clientWidth || 700;
+
+                // Arrange nodes in a circle-like layout
+                const cols = Math.min(nodes.length, 4);
+                const rows = Math.ceil(nodes.length / cols);
+                const spacingX = Math.max((containerW - padding * 2) / cols, nodeW + 40);
+                const spacingY = 120;
+                const totalH = rows * spacingY + padding * 2 + 40;
+
+                container.style.minHeight = totalH + 'px';
+                container.innerHTML = '';
+
+                // Create canvas for arrows
+                const canvas = document.createElement('canvas');
+                canvas.width = containerW;
+                canvas.height = totalH;
+                canvas.style.position = 'absolute';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                canvas.style.pointerEvents = 'none';
+                container.appendChild(canvas);
+
+                const ctx = canvas.getContext('2d');
+
+                // Create node DOM elements & compute positions
+                const nodePositions = new Map();
+                nodes.forEach((name, i) => {
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    const x = padding + col * spacingX + (spacingX - nodeW) / 2;
+                    const y = padding + row * spacingY;
+
+                    const el = document.createElement('div');
+                    el.style.cssText = `
+                        position:absolute; left:${x}px; top:${y}px; width:${nodeW}px; height:${nodeH}px;
+                        background:#1f2335; border:2px solid #c9a84c; border-radius:10px;
+                        display:flex; align-items:center; justify-content:center;
+                        color:#c9a84c; font-weight:700; font-size:15px; font-family:Inter,sans-serif;
+                        cursor:pointer; transition:all 0.2s; z-index:2;
+                        box-shadow: 0 2px 12px rgba(201,168,76,0.15);
+                    `;
+                    el.textContent = name;
+                    el.title = `Role: ${name}`;
+                    el.addEventListener('mouseenter', () => {
+                        el.style.borderColor = '#e0c872';
+                        el.style.boxShadow = '0 4px 20px rgba(201,168,76,0.35)';
+                        el.style.transform = 'scale(1.05)';
+                    });
+                    el.addEventListener('mouseleave', () => {
+                        el.style.borderColor = '#c9a84c';
+                        el.style.boxShadow = '0 2px 12px rgba(201,168,76,0.15)';
+                        el.style.transform = 'scale(1)';
+                    });
+                    el.addEventListener('click', () => showNodeDetails(name));
+                    container.appendChild(el);
+
+                    nodePositions.set(name, {
+                        x: x + nodeW / 2,
+                        y: y + nodeH / 2,
+                        left: x, top: y
+                    });
+                });
+
+                // Draw arrows on canvas
+                function drawArrow(fromPos, toPos, label, weight) {
+                    const dx = toPos.x - fromPos.x;
+                    const dy = toPos.y - fromPos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist === 0) return;
+
+                    // Offset from node center to border
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+                    const startX = fromPos.x + nx * (nodeW / 2 + 5);
+                    const startY = fromPos.y + ny * (nodeH / 2 + 5);
+                    const endX = toPos.x - nx * (nodeW / 2 + 12);
+                    const endY = toPos.y - ny * (nodeH / 2 + 12);
+
+                    // Line
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = weight > 2 ? '#c9a84c' : '#555580';
+                    ctx.lineWidth = weight > 2 ? 2.5 : 1.5;
+                    ctx.stroke();
+
+                    // Arrowhead
+                    const headLen = 10;
+                    const angle = Math.atan2(endY - startY, endX - startX);
+                    ctx.beginPath();
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(endX - headLen * Math.cos(angle - 0.4), endY - headLen * Math.sin(angle - 0.4));
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(endX - headLen * Math.cos(angle + 0.4), endY - headLen * Math.sin(angle + 0.4));
+                    ctx.strokeStyle = weight > 2 ? '#c9a84c' : '#7777aa';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // Label
+                    const midX = (startX + endX) / 2;
+                    const midY = (startY + endY) / 2;
+                    ctx.fillStyle = '#111119';
+                    ctx.fillRect(midX - 28, midY - 9, 56, 18);
+                    ctx.fillStyle = '#a9b1d6';
+                    ctx.font = '11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(label, midX, midY);
+                }
+
+                edges.forEach((weight, key) => {
+                    const [from, to] = key.split('->');
+                    const fromPos = nodePositions.get(from);
+                    const toPos = nodePositions.get(to);
+                    if (fromPos && toPos) {
+                        drawArrow(fromPos, toPos, `${weight} dir`, weight);
+                    }
+                });
+            }
+
+            // Show detailed agent info in modal
+            function showNodeDetails(roleName) {
+                const data = window.currentProjectData;
+                if (!data) return;
+
+                const nameUpper = roleName.toUpperCase();
+
+                // Find role matching name
+                const roleMatch = (data.roles || []).find(r => r.name.toUpperCase() === nameUpper);
+                // Find active directives for this role
+                const activeDirectives = (data.directives || []).filter(d =>
+                    d.source.toUpperCase() === nameUpper || d.source.includes('→' + nameUpper)
+                );
+
+                document.getElementById('modal-title').innerHTML = `🎭 ${nameUpper}`;
+
+                let html = '';
+
+                // Section 1: Memory & State (L0)
+                if (roleMatch) {
+                    html += `
+                <div class="modal-section">
+                    <div class="modal-section-title">Constitutional State (L0)</div>
+                    <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:var(--radius-sm); font-family:var(--mono);">
+                        ${esc(roleMatch.l0 || 'No L0 summary found.')}
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">Metrics</div>
+                    <div style="display:flex; gap:20px; color:var(--text-dim);">
+                        <div><span style="color:var(--text)">${roleMatch.lines}</span> lines parsed</div>
+                        <div>Last modified: <span style="color:var(--text)">${roleMatch.modified || 'Unknown'}</span></div>
+                    </div>
+                </div>`;
+                } else {
+                    html += `<p style="color:var(--warning)">Agent file not found.</p>`;
+                }
+
+                // Section 2: Active Pipeline
+                html += `<div class="modal-section">
+                <div class="modal-section-title">Active Pipeline Directives</div>`;
+
+                if (activeDirectives.length > 0) {
+                    html += `<div style="display:flex; flex-direction:column; gap:8px;">`;
+                    activeDirectives.forEach(d => {
+                        const icon = d.status === 'done' ? '✅' : d.status === 'active' ? '🔄' : '🟡';
+                        html += `
+                    <div style="background:var(--bg-card); border:1px solid var(--border); padding:10px; border-radius:4px;">
+                        <span style="font-size:0.7rem; font-weight:bold; color:var(--text-muted)">${d.source}</span>
+                        <div style="margin-top:4px;">${icon} ${esc(d.text)}</div>
+                    </div>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<p style="color:var(--text-muted); font-size:0.85rem">No active directives linked to this agent.</p>`;
+                }
+                html += `</div>`;
+
+                document.getElementById('modal-content').innerHTML = html;
+                document.getElementById('node-modal').classList.add('active');
+            }
+
+            function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+            function timeAgo(dateStr) {
+                const d = new Date(dateStr + 'T12:00:00');
+                const now = new Date();
+                const diff = Math.floor((now - d) / 1000);
+                if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+                return dateStr;
+            }
+
+            // ─── Drag & Drop ───
+            const zone = document.getElementById('upload-zone');
+            zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+            zone.addEventListener('drop', async (e) => {
+                e.preventDefault(); zone.classList.remove('drag-over');
+                const items = [...e.dataTransfer.items];
+                const dirItem = items.find(i => i.kind === 'file');
+                if (dirItem && dirItem.webkitGetAsEntry) {
+                    // Try to read as directory entry
+                    const entry = dirItem.webkitGetAsEntry();
+                    if (entry?.isDirectory) {
+                        const files = await readDirectoryEntry(entry);
+                        const data = await readProjectFromFileList(files);
+                        renderDashboard(data);
+                        return;
+                    }
+                }
+                // Fallback: read as files
+                const files = [...e.dataTransfer.files];
+                if (files.length) {
+                    const data = await readProjectFromFileList(files);
+                    renderDashboard(data);
+                }
+            });
+
+            async function readDirectoryEntry(entry, path = '') {
+                const files = [];
+                if (entry.isFile) {
+                    const file = await new Promise(r => entry.file(r));
+                    Object.defineProperty(file, 'webkitRelativePath', { value: path + file.name });
+                    files.push(file);
+                } else if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    const entries = await new Promise(r => reader.readEntries(r));
+                    for (const e of entries) {
+                        files.push(...await readDirectoryEntry(e, path + entry.name + '/'));
+                    }
+                }
+                return files;
+            }
+        </script>
+
+        <!-- MUSE 3D Particle Background Effect -->
+        <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+        <script src="muse-particle.js"></script>
+</body>
+
+</html>

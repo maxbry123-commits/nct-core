@@ -1,0 +1,31 @@
+#!/bin/bash
+# Pre-commit hook: block internal files from being committed to open-source repo
+
+BLOCKED_PATTERNS=(
+  "docs/internal/"
+  "MUSE_LAUNCH_CONTENT"
+  "USER.md"
+  ".muse/"
+  "memory/"
+  "convo/"
+)
+
+STAGED=$(git diff --cached --name-only)
+BLOCKED=""
+
+for pattern in "${BLOCKED_PATTERNS[@]}"; do
+  MATCHES=$(echo "$STAGED" | grep "$pattern" || true)
+  if [ -n "$MATCHES" ]; then
+    BLOCKED="$BLOCKED\n  ❌ $MATCHES"
+  fi
+done
+
+if [ -n "$BLOCKED" ]; then
+  echo ""
+  echo "🚨 BLOCKED: Internal files detected in commit!"
+  echo -e "$BLOCKED"
+  echo ""
+  echo "These files should NOT be in the open-source repo."
+  echo "Use 'git reset HEAD <file>' to unstage, or 'git commit --no-verify' to force."
+  exit 1
+fi

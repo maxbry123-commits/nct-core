@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "muse": {
+            "command": "__MUSE_ROOT__/scripts/mcp-server.sh",
+            "args": [
+                "--project-root",
+                "__PROJECT_ROOT__"
+            ]
+        }
+    }
+}
