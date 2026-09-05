@@ -52,18 +52,6 @@ Solución elegida: crear este archivo de estado y evidencia, sin activar rutas p
 Se leyeron los triggers de los 29 workflows existentes antes de crear este archivo: ninguno selecciona CHECKPOINT.md.
 Publicación inicial: commit 9cc44d00d7af7cb4efcfc109a5ce51e41e760bdc. Read-back desde main comprobado byte por byte; blob 67c0f20fd7b003584a33614c8cd03d3fba760d9d. Cierra solo la ausencia de checkpoint, no los GAPs de extracción.
 
-## Diez alternativas evaluadas (consulta 2026-09-05; no son diez soluciones aprobadas)
-1. Recuperar blob ordinario en el commit fuente. Inspección directa devuelve puntero; descartada para el GIF.
-2. Recuperar versión ordinaria del historial de esa misma ruta. Historial devolvió un commit de alta, con el mismo puntero.
-3. Buscar distribución oficial independiente en Releases. No demuestra GIF equivalente al commit fijado.
-4. Buscar referencia ordinaria en README fijado. No aporta copia equivalente de demo.gif.
-5. Incluir objetos LFS en archives de origen. Requiere configuración del origen y recuperación LFS incompatible con contrato.
-6. Usar cliente LFS/media/OID. Expresamente prohibido.
-7. Evitar transformación de bytes mediante hash-object --no-filters. No convierte puntero a GIF.
-8. Publicar blobs ordinarios mediante update-index --cacheinfo. No fabrica bytes ausentes.
-9. Repetir push con --no-verify. No valida ni materializa contenido.
-10. Aislar Cline y continuar componentes independientes con una plantilla EXTRACT_ONLY aprobada.
-
 ## Inventario de destinos ausentes
 1. Cline
 2. Craft.js
@@ -125,19 +113,17 @@ No afirmar que se montaron 11 Actions para el catálogo: no se observaron en los
 - Cierre global: NO.
 
 ### NCT-ZIP-REPAIR-05 — FAILED / CONTRACT_VIOLATION
-Inspección: 2026-09-05 12:58 UTC.
 Workflow/commit: https://github.com/maxbry123-commits/nct-core/commit/4fd6148b0cf59c14d85a4df5d90f8fbc49602099
 Run: https://github.com/maxbry123-commits/nct-core/actions/runs/33965037614
 Resultado: failure; publicación terminó con GH008 para OID d426d600fa80e9ac237cbad6b3f7f47a4aa2005d5218184e6b9565a8ee46d1ba; read-back skipped; Cline continúa ausente.
-Causa de control: el workflow ejecutó git lfs pull --include=assets/docs/demo.gif, contrario a la prohibición vigente; además git add volvió a convertir el GIF materializado en puntero por el filtro heredado.
+Causa de control: el workflow ejecutó git lfs pull, contrario a la prohibición vigente.
 Estado: no reintentar Repair 05 ni crear un delta equivalente. remaining_component_gaps=39.
 
 ### NCT-ZIP-BATCH-01-08 — BLOCKED / WORKFLOW_CONTRACT_GAP
-Inspección: 2026-09-05 13:58 UTC.
 Read-back de .github/workflows/nct-zip-extract-batch-01.yml a 08.yml: 8 archivos presentes, todos solo workflow_dispatch, cero runs asociados y cero jobs activos.
 Los 8 workflows ejecutan unzip sobre cada parte por separado; no reconstruyen las partes en orden natural antes de unzip -tq.
 Faltan inventario completo previo, CRC, guardas Zip Slip/symlink/especiales, presupuesto de expansión, hash determinista del árbol, inspección del índice staged, gate de blobs/punteros LFS y read-back remoto.
-La publicación usa git pull --rebase del commit generado, patrón prohibido por la sección 19 del skill; batch 01 incluye Cline, ya clasificado SOURCE_LFS_POINTER_GAP.
-Decisión: no despachar ni editar estos workflows y no reactivar repairs 01–05.
-Estado estable: remaining_component_gaps=39; control_gaps=2; historical_failed_runs separado.
-Catálogo: solo topological_sort.py verificado; 104/105 continúan abiertos.
+La publicación usa git pull --rebase del commit generado, patrón prohibido por la sección 19 del skill; batch 01 incluye Cline.
+Decisión histórica: no despachar ni editar estos workflows.
+Estado estable histórico: remaining_component_gaps=39; control_gaps=2.
+Catálogo: solo topological_sort.py verificado; 104/105 abiertos.
