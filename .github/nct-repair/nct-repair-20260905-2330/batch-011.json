@@ -1,0 +1,45 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/opencv_python-4.7.0.72-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/opencv_python-4.7.0.72-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "82e9f55abc6c01d949aab5ae51c726b520f04992",
+      "bytes": 47925647,
+      "status": "PREPARED",
+      "sha256": "e0c61946736462e67b5d3c223a682cd73add6e020db57ad5bb7c3f9192410a7f"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/pandas-1.5.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/pandas-1.5.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "d583bd92e9ccc294312ee4879fa835bd9208e213",
+      "bytes": 21553650,
+      "status": "PREPARED",
+      "sha256": "630ac2e0850b345f8b2d978d36468dee5b00aadd2a6c596e6dd7656491052a94"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/pandas-tests.tar",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/pandas-tests.tar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "af3043a361ede1f21797bfc2814e0f5fc74aaac6",
+      "bytes": 13690880,
+      "status": "PREPARED",
+      "sha256": "c5c1eb7055114d0a6cf86eba2edf3075b41ac4c455e1616d0549eb298fedfd58"
+    }
+  ]
+}
