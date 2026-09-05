@@ -1,0 +1,2 @@
+NCT Extract Action 01
+components=Aider,BESSER,Bit,BuilderIO,Cline
