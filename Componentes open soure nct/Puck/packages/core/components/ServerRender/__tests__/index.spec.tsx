@@ -1,0 +1,217 @@
+import { renderToString } from "react-dom/server.node";
+import { Config, Data } from "../../../types";
+import { Render } from "../index";
+
+describe("ServerRender", () => {
+  it("renders richtext content in dropzones as HTML in RSC mode", () => {
+    const config: Config = {
+      components: {
+        Section: {
+          fields: {},
+          render: ({ puck }) => (
+            <div>{puck.renderDropZone({ zone: "content" })}</div>
+          ),
+        },
+        RichText: {
+          fields: {
+            content: { type: "richtext" },
+          },
+          render: ({ content }) => <div>{content}</div>,
+        },
+      },
+    };
+
+    const data: Data = {
+      root: { props: {} },
+      content: [{ type: "Section", props: { id: "section-1" } }],
+      zones: {
+        "section-1:content": [
+          {
+            type: "RichText",
+            props: {
+              id: "richtext-1",
+              content: "<p>Hello world</p>",
+            },
+          },
+        ],
+      },
+    };
+
+    const html = renderToString(<Render config={config} data={data} />);
+
+    expect(html).toContain("<p>Hello world</p>");
+    expect(html).not.toContain("&lt;p&gt;Hello world&lt;/p&gt;");
+  });
+
+  it("renders richtext and slot content when server config keeps render fields", () => {
+    const config: Config = {
+      components: {
+        Hero: {
+          fields: {
+            description: { type: "richtext" },
+            image: {
+              type: "object",
+              objectFields: {
+                content: { type: "slot" },
+              },
+            },
+          },
+          render: ({ description, image }) => (
+            <section>
+              <div>{description}</div>
+              {image?.content ? <image.content /> : null}
+            </section>
+          ),
+        },
+        Heading: {
+          fields: {
+            title: { type: "text" },
+          },
+          render: ({ title }) => <h2>{title}</h2>,
+        },
+      },
+    };
+
+    const data: Data = {
+      root: { props: {} },
+      content: [
+        {
+          type: "Hero",
+          props: {
+            id: "hero-1",
+            description: "<p>Hello <strong>world</strong></p>",
+            image: {
+              content: [
+                {
+                  type: "Heading",
+                  props: {
+                    id: "heading-1",
+                    title: "Nested heading",
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+
+    const html = renderToString(<Render config={config} data={data} />);
+
+    expect(html).toContain("<p>Hello <strong>world</strong></p>");
+    expect(html).toContain("<h2>Nested heading</h2>");
+    expect(html).not.toContain("&lt;p&gt;Hello");
+  });
+
+  it("forwards additional props to the element provided via `as`", () => {
+    const config: Config = {
+      components: {
+        Section: {
+          fields: {
+            content: { type: "slot" },
+          },
+          render: ({ content: Content }) => (
+            <Content as="section" id="my-slot" data-custom="foo" />
+          ),
+        },
+        Heading: {
+          fields: { title: { type: "text" } },
+          render: ({ title }) => <h2>{title}</h2>,
+        },
+      },
+    };
+
+    const data: Data = {
+      root: { props: {} },
+      content: [
+        {
+          type: "Section",
+          props: {
+            id: "section-1",
+            content: [
+              { type: "Heading", props: { id: "heading-1", title: "Hello" } },
+            ],
+          },
+        },
+      ],
+    };
+
+    const html = renderToString(<Render config={config} data={data} />);
+
+    expect(html).toContain("<section");
+    expect(html).toContain('id="my-slot"');
+    expect(html).toContain('data-custom="foo"');
+    expect(html).toContain("<h2>Hello</h2>");
+    // Puck-internal props should not leak onto the element
+    expect(html).not.toContain('zone="');
+  });
+
+  it("strips `children` and `dangerouslySetInnerHTML` before forwarding to `as`", () => {
+    const configWithDangerousSetHTML: Config = {
+      components: {
+        Section: {
+          fields: {
+            content: { type: "slot" },
+          },
+          render: ({ content: Content }) => (
+            <Content
+              as="section"
+              dangerouslySetInnerHTML={{ __html: "<em>injected</em>" }}
+            />
+          ),
+        },
+        Heading: {
+          fields: { title: { type: "text" } },
+          render: ({ title }) => <h2>{title}</h2>,
+        },
+      },
+    };
+
+    const configWithChildren: Config = {
+      components: {
+        Section: {
+          fields: {
+            content: { type: "slot" },
+          },
+          render: ({ content: Content }) => (
+            <Content as="section">Rogue child</Content>
+          ),
+        },
+        Heading: {
+          fields: { title: { type: "text" } },
+          render: ({ title }) => <h2>{title}</h2>,
+        },
+      },
+    };
+
+    const data: Data = {
+      root: { props: {} },
+      content: [
+        {
+          type: "Section",
+          props: {
+            id: "section-1",
+            content: [
+              { type: "Heading", props: { id: "heading-1", title: "Hello" } },
+            ],
+          },
+        },
+      ],
+    };
+
+    // Without the runtime strip this throws: React refuses to render an
+    // element with both children and dangerouslySetInnerHTML
+    const htmlWithDangerousSetHTML = renderToString(
+      <Render config={configWithDangerousSetHTML} data={data} />
+    );
+    const htmlWithChildren = renderToString(
+      <Render config={configWithChildren} data={data} />
+    );
+
+    expect(htmlWithDangerousSetHTML).toContain("<h2>Hello</h2>");
+    expect(htmlWithDangerousSetHTML).not.toContain("injected");
+
+    expect(htmlWithChildren).toContain("<h2>Hello</h2>");
+    expect(htmlWithChildren).not.toContain("Rogue child");
+  });
+});

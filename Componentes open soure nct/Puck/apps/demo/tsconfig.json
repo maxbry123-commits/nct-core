@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig/nextjs.json",
+  "compilerOptions": {
+    "strict": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/core-dist": ["../../packages/core/dist"],
+      "@/core": ["../../packages/core/index.ts"],
+      "@/core/*": ["../../packages/core/*"],
+      "@puckeditor/core": ["../../packages/core/index.ts"],
+      "@/plugin-heading-analyzer": ["../../packages/plugin-heading-analyzer"],
+      "@/plugin-heading-analyzer/*": [
+        "../../packages/plugin-heading-analyzer/*"
+      ]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

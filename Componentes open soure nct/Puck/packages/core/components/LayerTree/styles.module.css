@@ -1,0 +1,69 @@
+.LayerTreeRoot {
+  min-width: max-content;
+
+  --_puck-iconbutton-color-bg-hover: transparent;
+
+  --_puck-outline-color-text: var(
+    --puck-outline-color-text,
+    var(--puck-color-text-primary)
+  );
+  --_puck-outline-border-width: var(
+    --puck-outline-border-width,
+    var(--puck-border-width-regular)
+  );
+  --_puck-outline-radius: var(--puck-outline-radius, var(--puck-radius-m));
+  --_puck-outline-caret-size: var(
+    --puck-outline-action-size,
+    var(--puck-icon-size-s)
+  );
+  --_puck-outline-icon-size: var(
+    --puck-outline-icon-size,
+    var(--puck-icon-size-xs)
+  );
+
+  --_puck-outline-color-bg-selected: var(
+    --puck-outline-color-bg-selected,
+    var(--puck-color-interactive-subtle)
+  );
+  --_puck-outline-color-bg-hover: var(
+    --puck-outline-color-bg-hover,
+    var(--puck-color-interactive-soft)
+  );
+
+  --_puck-outline-color-border-hover: var(
+    --puck-outline-color-border-hover,
+    var(--puck-color-interactive-subtle)
+  );
+
+  --_puck-outline-color-text-hover: var(
+    --puck-outline-color-text-hover,
+    var(--puck-color-interactive)
+  );
+
+  --_puck-outline-color-drop-indicator: var(
+    --puck-outline-color-drop-indicator,
+    var(--puck-color-line-placeholder)
+  );
+  --_puck-outline-drop-indicator-size: var(--puck-line-placeholder-width);
+
+  --_puck-outline-zone-color-text: var(
+    --puck-outline-zone-color-text,
+    var(--puck-color-text-muted)
+  );
+
+  --_puck-outline-actions-color-bg: transparent;
+
+  /* The width of the (possibly hidden) caret button at the start of every
+     row; titles and helpers indent by the same amount so all text aligns */
+  --_puck-outline-caret-slot: calc(
+    var(--_puck-outline-caret-size) +
+      var(--puck-iconbutton-space, var(--puck-space-1)) * 2
+  );
+
+  /* Caret slot + the row title's inline margin + one border width: lines
+     zone titles and helpers up with row titles at the same depth */
+  --_puck-outline-label-indent: calc(
+    var(--_puck-outline-caret-slot) + var(--puck-space-2) +
+      var(--_puck-outline-border-width)
+  );
+}
