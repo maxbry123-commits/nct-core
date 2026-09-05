@@ -1,0 +1,73 @@
+name: NCT Extract Repair 01
+run-name: NCT Extract Repair 01 • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-extract-repair-01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_TERMINAL_PROMPT: "0"
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+
+concurrency:
+  group: nct-extract-repair-01-componentes-open-source
+  cancel-in-progress: false
+
+jobs:
+  repair-action-01:
+    name: Repair extraction publish for Action 01
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+
+      - name: Extract Action 01 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='Componentes open soure nct'
+          for COMPONENT in 'Aider' 'BESSER' 'Bit' 'BuilderIO' 'Cline'; do
+            mapfile -t PARTS < <(find "$ROOT" -maxdepth 1 -type f -name "${COMPONENT}_*.zip" -print | sort -V)
+            test "${#PARTS[@]}" -gt 0
+            for PART in "${PARTS[@]}"; do
+              unzip -oq "$PART" -d "$ROOT"
+            done
+          done
+
+      - name: Publish extracted payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config --local filter.lfs.clean cat
+          git config --local filter.lfs.smudge cat
+          git config --local filter.lfs.process ''
+          git config --local filter.lfs.required false
+          git config --local core.compression 0
+          git add -A -- 'Componentes open soure nct'
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'build(nct): repair action 01 extracted payload'
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          exit 1
