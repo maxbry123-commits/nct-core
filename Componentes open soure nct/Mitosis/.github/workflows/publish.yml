@@ -1,0 +1,61 @@
+---
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+  # We allow manually dispatching workflow when needed. Most often, this will not be needed.
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  id-token: write # Required for npm OIDC trusted publishing
+  contents: read
+
+jobs:
+  publish-sdks:
+    name: Publish package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.BUILDER_BOT_FOR_LINT_APP_ID }}
+          private-key: ${{ secrets.BUILDER_BOT_FOR_LINT_PRIVATE_KEY }}
+
+      - name: Setup
+        uses: actions/checkout@v4
+        with:
+          # need this token to run CI checks on the created PR
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # OIDC trusted publishing requires Node >= 22.14.0
+
+      - name: 📥 Monorepo install
+        uses: ./.github/actions/yarn-nm-install
+        with:
+          cache-node-modules: true
+          cache-install-state: true
+
+      - name: Upgrade npm for OIDC trusted publishing
+        run: |
+          npm install -g npm@11.5.1 # minimum version supporting OIDC trusted publishing
+          npm --version
+
+      - name: Create Release PR & Publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: yarn ci:release
+          title: '📦 Publish Mitosis'
+          commit: '📦 Publish Mitosis'
+        env:
+          # need this token to run CI checks on the created PR
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
