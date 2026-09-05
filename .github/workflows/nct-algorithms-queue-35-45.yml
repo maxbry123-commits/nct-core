@@ -1,0 +1,44 @@
+# Copia quirúrgica de skills/skills Github acción/Copiar lotes de archivos/gha-copy-files.yml
+name: NCT Algorithms Queue 35-45
+run-name: NCT Algorithms Queue 35-45 • ${{ github.sha }}
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-algorithms-queue-35-45.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_TERMINAL_PROMPT: "0"
+concurrency:
+  group: nct-algorithms-copy-queue
+  cancel-in-progress: false
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: true
+      - name: cp -a
+        run: |
+          set -euo pipefail
+          src_file='reasoning_kernel/decision_on_demand/algorithm_queue_source/pending-35-45.json'
+          dest_file='reasoning_kernel/decision_on_demand/algorithm_queue/pending-35-45.json'
+          test -e "$src_file"
+          mkdir -p "$(dirname "$dest_file")"
+          cp -a "$src_file" "$dest_file"
+      - name: commit push main
+        run: |
+          set -euo pipefail
+          dest_file='reasoning_kernel/decision_on_demand/algorithm_queue/pending-35-45.json'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$dest_file"
+          git diff --cached --quiet && echo 'NO CHANGE' && exit 0
+          git commit -m 'copy: pending-35-45.json -> algorithm_queue'
+          git push origin HEAD:main
