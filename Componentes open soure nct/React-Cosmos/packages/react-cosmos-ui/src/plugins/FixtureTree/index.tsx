@@ -1,0 +1,66 @@
+import React, { useCallback } from 'react';
+import type { FixtureId } from 'react-cosmos-core';
+import { createPlugin } from 'react-plugin';
+import type { TreeExpansion } from '../../shared/treeExpansion.js';
+import type { CoreSpec } from '../Core/spec.js';
+import type { RendererCoreSpec } from '../RendererCore/spec.js';
+import type { RootSpec } from '../Root/spec.js';
+import type { RouterSpec } from '../Router/spec.js';
+import type { StorageSpec } from '../Storage/spec.js';
+import { FixtureSelectProvider } from './FixtureSelectContext.js';
+import { FixtureTreeContainer } from './FixtureTreeContainer.js';
+import { revealFixture } from './revealFixture.js';
+import { getTreeExpansion, setTreeExpansion } from './shared.js';
+import type { FixtureTreeSpec } from './spec.js';
+
+const { namedPlug, register } = createPlugin<FixtureTreeSpec>({
+  name: 'fixtureTree',
+  methods: {
+    revealFixture,
+  },
+});
+
+namedPlug('navPanelRow', 'fixtureTree', ({ pluginContext }) => {
+  const { getMethodsOf } = pluginContext;
+  const storage = pluginContext.getMethodsOf<StorageSpec>('storage');
+  const router = getMethodsOf<RouterSpec>('router');
+  const core = getMethodsOf<CoreSpec>('core');
+  const rendererCore = getMethodsOf<RendererCoreSpec>('rendererCore');
+  const root = getMethodsOf<RootSpec>('root');
+
+  const { fixturesDir, fixtureFileSuffix } = core.getFixtureFileVars();
+  const expansion = getTreeExpansion(storage);
+  const setExpansionMemo = useCallback(
+    (newExpansion: TreeExpansion) => setTreeExpansion(storage, newExpansion),
+    [storage]
+  );
+
+  const handleFixtureSelect = useCallback(
+    (fixtureId: FixtureId, keepNavOpen: boolean) => {
+      if (root.drawerPanelsEnabled()) {
+        if (keepNavOpen && !root.navPanelOpen()) root.openNavPanel();
+        if (!keepNavOpen && root.navPanelOpen()) root.closeNavPanel();
+      }
+
+      router.selectFixture(fixtureId);
+    },
+    [root, router]
+  );
+
+  return (
+    <FixtureSelectProvider onSelect={handleFixtureSelect}>
+      <FixtureTreeContainer
+        fixturesDir={fixturesDir}
+        fixtureFileSuffix={fixtureFileSuffix}
+        selectedFixtureId={router.getSelectedFixtureId()}
+        fixtures={rendererCore.getFixtures()}
+        expansion={expansion}
+        setExpansion={setExpansionMemo}
+      />
+    </FixtureSelectProvider>
+  );
+});
+
+export { register };
+
+if (process.env.NODE_ENV !== 'test') register();

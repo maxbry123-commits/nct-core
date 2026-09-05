@@ -1,0 +1,17 @@
+{
+  "name": "react-cosmos-dom",
+  "version": "7.4.0",
+  "description": "React Cosmos DOM",
+  "repository": "https://github.com/react-cosmos/react-cosmos/tree/main/packages/react-cosmos-dom",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "react-cosmos-core": "^7.4.0",
+    "react-cosmos-renderer": "^7.4.0"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  }
+}

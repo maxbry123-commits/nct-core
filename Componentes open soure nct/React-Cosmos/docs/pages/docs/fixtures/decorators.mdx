@@ -1,0 +1,51 @@
+import { Callout } from 'nextra/components';
+
+# Decorators
+
+Wrapping components in fixtures can become repetitive. Decorators can be used to apply context providers (or any other wrapper) to a subset of fixtures.
+
+A `cosmos.decorator` file looks like this:
+
+```jsx filename="cosmos.decorator.js"
+export default ({ children }) => <Provider store={store}>{children}</Provider>;
+```
+
+The rules for decorators are:
+
+- A decorator must be placed in a file named `cosmos.decorator.{jsx,tsx}`.
+- A decorator must be a default export.
+- A decorator is a React component that receives a `children` prop.
+- A decorator only applies to fixture files contained in the decorator's
+  directory.
+- Decorators can be composed, in the order of their position in the
+  file system hierarchy (from outer to inner).
+
+<Callout type="info">
+  A `cosmos.decorator` file placed in the root source directory applies to all
+  fixtures.
+</Callout>
+
+A decorator file can also export an array of decorators:
+
+```jsx filename="cosmos.decorator.js"
+export default [Decorator1, Decorator2, Decorator3];
+```
+
+## Importing Global CSS
+
+For styles that need to be applied globally—such as `normalize.css`, global variables, or other design system styles—it is recommended **not** to import them inside a decorator. Importing CSS files in a decorator may result in their styles being appended after your fixture styles, which can lead to unexpected styling issues.
+
+Instead, add these CSS files to the `globalImports` array in your [cosmos.config.json](/docs/configuration/cosmos-config). For example:
+
+```json
+{
+  "plugins": ["…"],
+  "globalImports": [
+    "normalize.css",
+    "./src/design-system/global-variables.css",
+    "./src/design-system/global.css"
+  ]
+}
+```
+
+This ensures that your global CSS is loaded before any fixture-specific styles, maintaining the intended cascade.

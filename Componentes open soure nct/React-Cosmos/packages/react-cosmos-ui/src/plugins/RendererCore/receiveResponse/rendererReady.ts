@@ -1,0 +1,82 @@
+import type { RendererId, RendererReadyResponse } from 'react-cosmos-core';
+import { isEqual } from 'react-cosmos-core';
+import type { NotificationsSpec } from '../../Notifications/spec.js';
+import type { RouterSpec } from '../../Router/spec.js';
+import type { RendererCoreContext, State } from '../shared/index.js';
+import {
+  postSelectFixtureRequest,
+  postSetFixtureStateRequest,
+} from '../shared/postRequest.js';
+
+export function receiveRendererReadyResponse(
+  context: RendererCoreContext,
+  { payload }: RendererReadyResponse
+) {
+  const { rendererId } = payload;
+  const { connectedRendererIds: prevRendererIds, globalFixtureState } =
+    context.getState();
+
+  context.setState(stateUpdater, afterStateChanged);
+
+  function stateUpdater(prevState: State) {
+    // The first announced renderer becomes the primary one
+    const primaryRendererId = prevState.primaryRendererId || rendererId;
+    const { connectedRendererIds, fixtureState } = prevState;
+
+    return {
+      ...prevState,
+      connectedRendererIds: addToSet(connectedRendererIds, rendererId),
+      primaryRendererId,
+      fixtureState:
+        rendererId === primaryRendererId ? globalFixtureState : fixtureState,
+    };
+  }
+
+  function afterStateChanged() {
+    const router = context.getMethodsOf<RouterSpec>('router');
+
+    const rendererFixtureId = payload.selectedFixtureId;
+    const routerFixtureId = router.getSelectedFixtureId();
+
+    if (routerFixtureId && !isEqual(routerFixtureId, rendererFixtureId)) {
+      const { fixtureState } = context.getState();
+      postSelectFixtureRequest(
+        context,
+        rendererId,
+        routerFixtureId,
+        fixtureState
+      );
+    } else if (rendererFixtureId) {
+      if (Object.keys(globalFixtureState).length > 0) {
+        postSetFixtureStateRequest(
+          context,
+          rendererId,
+          rendererFixtureId,
+          globalFixtureState
+        );
+      }
+    }
+
+    // Notify about connected renderers that weren't connected before
+    if (!prevRendererIds.includes(rendererId)) {
+      notifyRendererConnection(context, rendererId);
+    }
+  }
+}
+
+function notifyRendererConnection(
+  { getMethodsOf }: RendererCoreContext,
+  rendererId: RendererId
+) {
+  const notifications = getMethodsOf<NotificationsSpec>('notifications');
+  notifications.pushTimedNotification({
+    id: `renderer-connect-${rendererId}`,
+    type: 'info',
+    title: 'Renderer connected',
+    info: 'Your fixtures are ready to use.',
+  });
+}
+
+function addToSet<T>(set: T[], item: T) {
+  return set.indexOf(item) === -1 ? [...set, item] : set;
+}

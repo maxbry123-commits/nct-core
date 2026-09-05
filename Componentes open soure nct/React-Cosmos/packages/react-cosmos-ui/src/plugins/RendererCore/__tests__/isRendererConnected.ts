@@ -1,0 +1,40 @@
+import { loadPlugins, resetPlugins } from 'react-plugin';
+import {
+  getRendererCoreMethods,
+  mockCore,
+  mockNotifications,
+  mockRouter,
+} from '../../../testHelpers/pluginMocks.js';
+import { register } from '../index.js';
+import { mockRendererReady } from '../testHelpers/index.js';
+
+beforeEach(register);
+
+afterEach(resetPlugins);
+
+function registerTestPlugins() {
+  mockCore();
+  mockRouter({
+    getSelectedFixtureId: () => null,
+  });
+  mockNotifications();
+}
+
+function isRendererConnected() {
+  return getRendererCoreMethods().isRendererConnected();
+}
+
+it('returns false', async () => {
+  registerTestPlugins();
+  loadPlugins();
+
+  expect(isRendererConnected()).toBe(false);
+});
+
+it('returns true', async () => {
+  registerTestPlugins();
+  loadPlugins();
+  mockRendererReady('mockRendererId');
+
+  expect(isRendererConnected()).toBe(true);
+});

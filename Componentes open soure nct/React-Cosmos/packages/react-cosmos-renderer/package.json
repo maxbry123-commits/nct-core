@@ -1,0 +1,19 @@
+{
+  "name": "react-cosmos-renderer",
+  "version": "7.4.0",
+  "description": "React Cosmos Renderer",
+  "repository": "https://github.com/react-cosmos/react-cosmos/tree/main/packages/react-cosmos-renderer",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "dependencies": {
+    "react-cosmos-core": "^7.4.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

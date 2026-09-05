@@ -1,0 +1,4 @@
+{
+  "name": "Webpack",
+  "server": "dist/server/webpackServerPlugin.js"
+}

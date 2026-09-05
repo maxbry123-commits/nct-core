@@ -1,0 +1,126 @@
+name: test
+on:
+  pull_request:
+  push:
+    branches: main
+jobs:
+  source:
+    if: ${{ !contains(github.event.head_commit.message, '[release]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+          - windows
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: .npm-cache
+          key: '${{ runner.os }}-npm'
+
+      - run: npm ci --cache .npm-cache
+
+      # Test source (with cross-package coverage)
+      - run: npm run format:check
+      - run: npm run src
+      - run: npm run check-types
+      - run: npm run lint
+      - run: npm run test:run -- --coverage
+
+      - uses: codecov/codecov-action@v6
+        # Only report coverage once
+        if: matrix.os == 'ubuntu'
+        with:
+          directory: coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+
+  examples:
+    if: ${{ !contains(github.event.head_commit.message, '[release]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [webpack, vite]
+        os: [ubuntu, windows]
+        node-version: [22]
+        lazy: [false]
+        include:
+          - example: webpack
+            os: ubuntu
+            node-version: 24
+            lazy: false
+          - example: webpack
+            os: windows
+            node-version: 24
+            lazy: false
+          - example: webpack
+            os: ubuntu
+            node-version: 22
+            lazy: true
+          - example: vite
+            os: ubuntu
+            node-version: 22
+            lazy: true
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: .npm-cache
+          key: '${{ runner.os }}-npm'
+
+      - run: npm ci --cache .npm-cache
+      - run: npm run build
+
+      # Cache Playwright binaries, keyed by the installed @playwright/test version
+      - id: playwright-version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').devDependencies['@playwright/test']")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ${{ matrix.os == 'windows' && 'C:\Users\runneradmin\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: '${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}'
+
+      # https://playwright.dev/docs/browsers#install-system-dependencies
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Generate static export for DOM export test
+      - run: npm --workspace example-${{ matrix.example }} run export -- --lazy=${{ matrix.lazy }}
+
+      # Start web servers for each test type:
+      # - DOM dev server
+      # - DOM export
+      # - Native dev server
+      # Wait for the dev server renderer to build before running tests
+      - name: Start servers and run tests
+        run: |
+          npm --workspace example-${{ matrix.example }} run start -- --lazy=${{ matrix.lazy }} &
+          npm --workspace example-${{ matrix.example }} run serve -- -s &
+          npm --workspace example-${{ matrix.example }} run native -- --lazy=${{ matrix.lazy }} --port 5002 &
+          npx wait-on -t 30000 ${{ matrix.example == 'vite' && 'http://localhost:5050' || 'http://localhost:5000/renderer.html' }} &&
+          npm run test:e2e
+        env:
+          TEST_EXAMPLE_NAME: ${{ matrix.example }}
+          TEST_LAZY: ${{ matrix.lazy }}
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.example }}-${{ matrix.os }}-node${{ matrix.node-version }}${{ matrix.lazy == true && '-lazy' || '' }}
+          path: tests/playwright-report
