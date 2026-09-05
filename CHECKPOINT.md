@@ -141,3 +141,14 @@ Resultado: failure; publicación terminó con GH008 para OID d426d600fa80e9ac237
 Causa de control: el workflow ejecutó `git lfs pull --include=assets/docs/demo.gif`, contrario a la prohibición vigente de recuperación por LFS/OID/media; además `git add` volvió a convertir el GIF materializado en puntero por el filtro heredado.
 Estado: no reintentar Repair 05 ni crear un delta equivalente. `remaining_component_gaps=39`.
 Contención: se pausaron los Watchdogs duplicados `GitHub GAP X-Ray` y `GitHub GAP LOOP 2`; `GitHub GAP Loop` ya estaba pausado. Este ledger no certifica cierre ni autoriza LFS.
+
+
+### NCT-ZIP-BATCH-01-08 — BLOCKED / WORKFLOW_CONTRACT_GAP
+Inspección: 2026-09-05 13:58 UTC.
+Read-back de `.github/workflows/nct-zip-extract-batch-01.yml` a `08.yml`: 8 archivos presentes, todos solo `workflow_dispatch`, cero runs asociados y cero jobs activos.
+Los 8 workflows ejecutan `unzip` sobre cada parte `*_NNNN.zip` por separado; no reconstruyen las partes en orden natural antes de `unzip -tq`.
+Faltan inventario completo previo, CRC, guardas Zip Slip/symlink/especiales, presupuesto de expansión, hash determinista del árbol, inspección del índice staged, gate de blobs/punteros LFS y read-back remoto.
+La publicación usa `git pull --rebase` del commit generado, patrón prohibido por la sección 19 del skill; batch 01 incluye Cline, ya clasificado `SOURCE_LFS_POINTER_GAP`.
+Decisión: no despachar ni editar estos workflows y no reactivar repairs 01–05. Se necesita extractor/publicador canónico compatible o autorización explícita para el delta lógico.
+Estado estable: `remaining_component_gaps=39`; `control_gaps=2` (plantilla incompatible + batches 01–08 no conformes); `historical_failed_runs` se conserva separado y no aumenta el conteo funcional.
+Catálogo: el destino del código nuevo sigue sin `destination_repository + destination_root` canónicos completos; solo `topological_sort.py` está verificado, por lo que `104/105` continúan abiertos sin crear Actions.
