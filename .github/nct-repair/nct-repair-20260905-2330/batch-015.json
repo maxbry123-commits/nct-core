@@ -1,0 +1,19 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/yt-4.1.4-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/yt-4.1.4-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "7f3cc72c36ecebfe135bc175f00011ef0f350892",
+      "bytes": 78112349,
+      "status": "PREPARED",
+      "sha256": "0f36a886fe0e4f1444bceecf5a3de6e88b7bb949a1b80c451561b5fa4e0e4c75"
+    }
+  ]
+}
