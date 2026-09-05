@@ -1,0 +1,81 @@
+name: NCT Extract Repair 03
+run-name: NCT Extract Repair 03 • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-extract-repair-03.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_TERMINAL_PROMPT: "0"
+
+concurrency:
+  group: nct-core-main-componentes-open-source-cline-repair-03
+  cancel-in-progress: false
+
+jobs:
+  extract-cline:
+    name: EXTRACT_ONLY Cline from existing ZIP parts
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout destination main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+
+      - name: Checkout pinned GitHub Action skill
+        uses: actions/checkout@v4
+        with:
+          repository: maxbry123-commits/agentes
+          ref: 2003284d440aeffc13e03eac57394a636e2edbd0
+          path: _skill
+          fetch-depth: 1
+          lfs: false
+
+      - name: Extract existing Cline ZIP parts with canonical skill code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local filter.lfs.clean cat
+          git config --local filter.lfs.smudge cat
+          git config --local filter.lfs.process ''
+          git config --local filter.lfs.required false
+          git config --local core.compression 0
+
+          python3 '_skill/skills/skills Github acción/scripts/extract_existing_parts.py' \
+            'Componentes open soure nct' \
+            'Cline' \
+            'https://github.com/cline/cline.git' \
+            '48d63852745460ff0fa3dfcc0457bbe2493841de' \
+            'Apache-2.0' \
+            '3'
+
+          rm -rf _skill
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- 'Componentes open soure nct/Cline'
+          if git diff --cached --quiet; then
+            echo 'NO_CHANGE_GAP: Cline produced no staged payload' >&2
+            exit 32
+          fi
+          git commit -m 'build(nct): extract Cline repair 03'
+          git push --no-verify origin HEAD:main
+
+      - name: Read-back final Cline tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          test -d 'Componentes open soure nct/Cline'
+          test "$(find 'Componentes open soure nct/Cline' -type f | wc -l)" -gt 5
+          grep -Fx '48d63852745460ff0fa3dfcc0457bbe2493841de' 'Componentes open soure nct/Cline/SOURCE_COMMIT.txt'
+          (cd 'Componentes open soure nct/Cline' && sha256sum -c SOURCE_SHA256SUMS.txt)
+          echo 'READ_BACK PASS Cline EXTRACTED_TREE'
