@@ -46,11 +46,11 @@ Esto prueba solapamiento de runs con capacidad de escribir el mismo destino; no 
 Ninguno sigue activo en la lectura. No sumar este control como otro componente ausente.
 Las otras tareas de vigilancia no fueron modificadas por esta revisión.
 
-### NCT-ZIP-PERSISTENCE — REPAIRED_PENDING_READBACK
+### NCT-ZIP-PERSISTENCE — REPAIRED_READBACK_PASS
 Evidencia base: árbol completo no truncado de main sin CHECKPOINT.md.
 Solución elegida: crear este archivo de estado y evidencia, sin activar rutas push de workflows.
 Se leyeron los triggers de los 29 workflows existentes antes de crear este archivo: ninguno selecciona CHECKPOINT.md.
-Resultado de publicación y read-back debe comprobarse desde main; un archivo preparado no equivale a guardado.
+Publicación inicial: commit 9cc44d00d7af7cb4efcfc109a5ce51e41e760bdc. Read-back desde main comprobado byte por byte; blob 67c0f20fd7b003584a33614c8cd03d3fba760d9d. Cierra solo la ausencia de checkpoint, no los GAPs de extracción.
 
 ## Diez alternativas evaluadas (consulta 2026-09-05; no son diez soluciones aprobadas)
 1. Recuperar blob ordinario en el commit fuente. Inspección directa devuelve puntero; descartada para el GIF. https://github.com/cline/cline/blob/48d63852745460ff0fa3dfcc0457bbe2493841de/assets/docs/demo.gif
@@ -128,3 +128,6 @@ No afirmar que se montaron 11 Actions para el catálogo: no se observaron en los
 - Goals 12/12 global, hashes globales, read-back global y aprobación manual: NO CERTIFICADOS.
 - remaining_component_gaps=39; no sumar controles ni runs históricos como componentes.
 - Cierre global: NO.
+
+## Control de continuidad
+El Watchdog GitHub GAP Loop fue deshabilitado por bloqueo de ejecución bajo el contrato fijado; los otros Watchdogs no fueron cambiados. Reanudar requiere una plantilla EXTRACT_ONLY compatible autorizada y coordinación de escritor único. No se declaró tarea completada.
