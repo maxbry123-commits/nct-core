@@ -1,0 +1,58 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/statsmodels-tests.tar",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/statsmodels-tests.tar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "ed0d39fec309ca90a8f1bd5eae2c4b76be984871",
+      "bytes": 15605760,
+      "status": "PREPARED",
+      "sha256": "1ed9ee5b06fcbe22462ecd66abe02e274370db14d06867926a4b7e9912402438"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/sympy-1.11.1-py3-none-any.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/sympy-1.11.1-py3-none-any.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "3250879d1769977532897e30bb43951069157a3a",
+      "bytes": 20011970,
+      "status": "PREPARED",
+      "sha256": "a28cc1df962686ed807efc8aa51edc12ceb45a4b5f166fa5a7a97a8b9387987d"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/sympy-tests.tar",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/sympy-tests.tar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "5afa4886e34cdebe0d24caef9f930ae26b27588b",
+      "bytes": 13271040,
+      "status": "PREPARED",
+      "sha256": "d4c8d40dfd7d3ac98a40a472a22ba761a7f2a0c6659f5664022796abb45795f4"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/test-1.0.0.zip",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/test-1.0.0.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "849e7b5b01893cd8249a008a3e3dc069e8f6be90",
+      "bytes": 24344702,
+      "status": "PREPARED",
+      "sha256": "fc13f4bcd03baf3fd8b505fa34dfdab788b7fe8d5bfc2884b9a6e0104e8bfad5"
+    }
+  ]
+}
