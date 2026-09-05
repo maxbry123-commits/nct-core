@@ -1,0 +1,58 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "PlantUML",
+      "parts": 5,
+      "path": "src/main/resources/teavm/material7.4.47.min.js",
+      "source_commit": "c7d69645e01e17c1ec2ba210b8416d0612ca6fa8",
+      "source_url": "https://github.com/plantuml/plantuml.git",
+      "destination": "Componentes open soure nct/PlantUML/src/main/resources/teavm/material7.4.47.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "8dcf204c0dc13729d59e6d2380d68f067fbe73c2",
+      "bytes": 17151755,
+      "status": "PREPARED",
+      "sha256": "5e20c3f08bde99d040fb7fe86ab179b34da2d8e001e9134d2bcbbdcd8513d228"
+    },
+    {
+      "component": "PlantUML",
+      "parts": 5,
+      "path": "src/main/resources/teavm/tupadr3.min.js",
+      "source_commit": "c7d69645e01e17c1ec2ba210b8416d0612ca6fa8",
+      "source_url": "https://github.com/plantuml/plantuml.git",
+      "destination": "Componentes open soure nct/PlantUML/src/main/resources/teavm/tupadr3.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "c82d23550a5683a1cba94ba1940fa0243ca78994",
+      "bytes": 20227666,
+      "status": "PREPARED",
+      "sha256": "38533c680fc8bd6fc7c90690f570f358f9c0f23a00d682cbe038e68d2df9abb7"
+    },
+    {
+      "component": "Plasmic",
+      "parts": 8,
+      "path": "platform/loader-tests/data/plasmic-website-2023.json",
+      "source_commit": "bf9e3cca572321467a92f4d53b69eb00767816a6",
+      "source_url": "https://github.com/plasmicapp/plasmic.git",
+      "destination": "Componentes open soure nct/Plasmic/platform/loader-tests/data/plasmic-website-2023.json",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "bb22add1ee3e56a53dab5102eaca85dfa4e48910",
+      "bytes": 28538323,
+      "status": "PREPARED",
+      "sha256": "4a23ae0de0b797ab7c80f7fc08459b53f21939e9df43db9e0b3cc705ff6fb4a2"
+    },
+    {
+      "component": "React-Spectrum",
+      "parts": 12,
+      "path": "packages/dev/docs/pages/assets/datepicker.mp4",
+      "source_commit": "5129b30d8cf5a0791ea528b99c115c8d9dae0f9e",
+      "source_url": "https://github.com/adobe/react-spectrum.git",
+      "destination": "Componentes open soure nct/React-Spectrum/packages/dev/docs/pages/assets/datepicker.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "125006ce1d280880550a798391f4fca0b41e8336",
+      "bytes": 11344096,
+      "status": "PREPARED",
+      "sha256": "97c6e1b084102f2e3c4e19b4628c1b0cc44b35d29741d612ee2981ed666a4eee"
+    }
+  ]
+}
