@@ -1,0 +1,75 @@
+name: NCT Extract Repair 02
+run-name: NCT Extract Repair 02 • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-extract-repair-02.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_TERMINAL_PROMPT: "0"
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+
+concurrency:
+  group: nct-extract-repair-02-componentes-open-source-action-01
+  cancel-in-progress: false
+
+jobs:
+  repair-action-01:
+    name: Extract Action 01 sequentially by component
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          lfs: false
+
+      - name: Extract and publish Action 01 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='Componentes open soure nct'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config --local filter.lfs.clean cat
+          git config --local filter.lfs.smudge cat
+          git config --local filter.lfs.process ''
+          git config --local filter.lfs.required false
+          git config --local core.compression 0
+
+          for COMPONENT in 'Aider' 'BESSER' 'Bit' 'BuilderIO' 'Cline'; do
+            mapfile -t PARTS < <(find "$ROOT" -maxdepth 1 -type f -name "${COMPONENT}_*.zip" -print | sort -V)
+            test "${#PARTS[@]}" -gt 0
+
+            for PART in "${PARTS[@]}"; do
+              unzip -oq "$PART" -d "$ROOT"
+            done
+
+            git add -A -- "$ROOT"
+            if git diff --cached --quiet; then
+              continue
+            fi
+
+            git commit -m "build(nct): extract ${COMPONENT} action 01"
+            pushed=0
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                pushed=1
+                break
+              fi
+              git rebase --abort 2>/dev/null || true
+              sleep $((attempt * 2))
+            done
+            test "$pushed" -eq 1
+          done
