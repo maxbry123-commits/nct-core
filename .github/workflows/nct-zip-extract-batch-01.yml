@@ -1,0 +1,51 @@
+name: NCT ZIP Extract Batch 01 - Cline to MUSE
+run-name: NCT ZIP Extract Batch 01 - ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nct-core-main-componentes-open-source-extraction
+  cancel-in-progress: false
+
+jobs:
+  extract-batch-1:
+    name: Extract five ZIP components
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+      - name: Extract ZIP parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='Componentes open soure nct'
+          components=(Cline Craft.js Frappe-Builder GrapesJS MUSE)
+          for component in "${components[@]}"; do
+            mapfile -t parts < <(find "$ROOT" -maxdepth 1 -type f -name "${component}_*.zip" -print | sort -V)
+            test "${#parts[@]}" -gt 0
+            for part in "${parts[@]}"; do unzip -oq "$part" -d "$ROOT"; done
+          done
+      - name: Publish extracted trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='Componentes open soure nct'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config --local filter.lfs.clean cat
+          git config --local filter.lfs.smudge cat
+          git config --local filter.lfs.process ''
+          git config --local filter.lfs.required false
+          git add -- "$ROOT/Cline" "$ROOT/Craft.js" "$ROOT/Frappe-Builder" "$ROOT/GrapesJS" "$ROOT/MUSE"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'extract(nct): ZIP batch 01'
+          git pull --rebase origin main
+          git push origin HEAD:main
