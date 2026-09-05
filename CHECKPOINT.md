@@ -1,3 +1,143 @@
 # CHECKPOINT — NCT ZIP LOOP
+Fecha de inspección: 2026-09-05 11:49 UTC.
+Snapshot inspeccionado: cbecd289f4b27fc88e2e89ccac0fb8ad9ba1db93.
+Contrato canónico: https://github.com/maxbry123-commits/agentes/tree/c789e5fe635e220230ffc759d86dc3bbb8e261d4/skills/skills%20Github%20acci%C3%B3n
 
-Estado histórico preservado. No se considera cierre por este archivo.
+## Estado honesto
+BLOCKED_PENDING_AUTHORIZED_TEMPLATE. No VERIFIED_CLOSED.
+265 partes ZIP, 43 grupos/componentes, 4 árboles presentes y 39 destinos de componente ausentes.
+La presencia de los 4 árboles NO certifica sus hashes ni su integridad.
+30 runs listados de 30; todos terminados en la lectura realizada.
+Ningún workflow despachado, reactivado o modificado por esta auditoría.
+ZIPs conservados; ningún payload cambiado.
+No existía CHECKPOINT.md en el árbol completo no truncado del snapshot.
+Esta creación corrige únicamente ausencia de persistencia; no resuelve Cline.
+
+## Ledger
+### NCT-ZIP-SOURCE-CLINE — OPEN / NONRETRYABLE
+Evidencia: https://github.com/cline/cline/blob/48d63852745460ff0fa3dfcc0457bbe2493841de/assets/docs/demo.gif
+Blob del puntero: 35eb8d0bbe18ea8005df7aff70a327b0945ec12f.
+Ruta bloqueada: assets/docs/demo.gif; tamaño original declarado 19108207 bytes.
+Run: https://github.com/maxbry123-commits/nct-core/actions/runs/33963739711
+Log: https://github.com/maxbry123-commits/nct-core/actions/runs/33963739711/job/101300034187
+11:36:09 UTC: SOURCE_LFS_POINTER_GAP; extracción falló y publicación quedó skipped.
+El primer commit del historial de esa ruta, cc96efc27146c9377f2e6de73c830ad448df8e96 (2024-10-09), contiene el mismo blob puntero.
+Causa: la fuente contiene referencia LFS, no bytes GIF. No es un GAP nuevo por cada run.
+Delta de esta revisión: evidencia/checkpoint; no retry ni recuperación LFS.
+
+### NCT-ZIP-TEMPLATE-CONTRACT — OPEN / AUTHORITY_REQUIRED
+Se leyeron SKILL.md, ADVERTENCIA-CODE.json, README.md, ORGANIZATION-METHODS-v3.6.md y los cuatro archivos de código de descarga/extracción fijados.
+Locks verificados por SHA de blob: gha-download-extract.yml=4e64ca02c2bc970dc4cd246a2a43ec2fdb7b4e62; YAML FINAL=9ffd682ec9491741a8f49e4a7f8bb385aa62c2ee; Python FINAL=b629f9a7844a4752ff7c28b844b83e7f1d99ccb1; Python normal=1504bbc7ec780a351beb105df884180c9ae2c666.
+Los Python fijados adquieren/paquetizan ZIP, no implementan extracción de ZIP existentes al árbol final; su push usa rebase de commit generado y carece del gate completo de índice exigido por sección 19.
+El Python FINAL captura fallo de push y retorna, por lo que su terminación no demuestra publicación.
+scripts/extract_existing_parts.py NO existe en ese commit canónico (404 confirmado y directorio enumerado).
+El script local de nct-core tiene SHA 082e6f63980aff5e457837a3030af37892a7e069; no está incluido entre esos locks.
+No se puede resolver esta incompatibilidad cambiando únicamente TASK_ID, fuente/ref, rutas, operación o nombres.
+Falta autorización de un código extractor/publicador compatible y su commit canónico, o autorización explícita del delta lógico necesario.
+No sustituir silenciosamente el commit del skill.
+
+### NCT-ZIP-SINGLE-WRITER — OPEN / CONTROL
+Repair 03: https://github.com/maxbry123-commits/nct-core/actions/runs/33963455614
+Ventana 11:29:17–11:37:32 UTC.
+Repair 04: https://github.com/maxbry123-commits/nct-core/actions/runs/33963739711
+Ventana 11:35:24–11:36:12 UTC.
+Ambos apuntan a Componentes open soure nct/Cline y usan concurrency.group diferentes.
+Esto prueba solapamiento de runs con capacidad de escribir el mismo destino; no prueba pushes simultáneos.
+Ninguno sigue activo en la lectura. No sumar este control como otro componente ausente.
+Las otras tareas de vigilancia no fueron modificadas por esta revisión.
+
+### NCT-ZIP-PERSISTENCE — REPAIRED_READBACK_PASS
+Evidencia base: árbol completo no truncado de main sin CHECKPOINT.md.
+Solución elegida: crear este archivo de estado y evidencia, sin activar rutas push de workflows.
+Se leyeron los triggers de los 29 workflows existentes antes de crear este archivo: ninguno selecciona CHECKPOINT.md.
+Publicación inicial: commit 9cc44d00d7af7cb4efcfc109a5ce51e41e760bdc. Read-back desde main comprobado byte por byte; blob 67c0f20fd7b003584a33614c8cd03d3fba760d9d. Cierra solo la ausencia de checkpoint, no los GAPs de extracción.
+
+## Diez alternativas evaluadas (consulta 2026-09-05; no son diez soluciones aprobadas)
+1. Recuperar blob ordinario en el commit fuente. Inspección directa devuelve puntero; descartada para el GIF.
+2. Recuperar versión ordinaria del historial de esa misma ruta. Historial devolvió un commit de alta, con el mismo puntero.
+3. Buscar distribución oficial independiente en Releases. No demuestra GIF equivalente al commit fijado.
+4. Buscar referencia ordinaria en README fijado. No aporta copia equivalente de demo.gif.
+5. Incluir objetos LFS en archives de origen. Requiere configuración del origen y recuperación LFS incompatible con contrato.
+6. Usar cliente LFS/media/OID. Expresamente prohibido.
+7. Evitar transformación de bytes mediante hash-object --no-filters. No convierte puntero a GIF.
+8. Publicar blobs ordinarios mediante update-index --cacheinfo. No fabrica bytes ausentes.
+9. Repetir push con --no-verify. No valida ni materializa contenido.
+10. Aislar Cline y continuar componentes independientes con una plantilla EXTRACT_ONLY aprobada.
+
+## Inventario de destinos ausentes
+1. Cline
+2. Craft.js
+3. Frappe-Builder
+4. GrapesJS
+5. MUSE
+6. Mermaid
+7. Mitosis
+8. Motion
+9. Onlook
+10. OpenDesign
+11. OpenPencil
+12. Parcel
+13. Penpot
+14. PlantUML
+15. Plasmic
+16. PracticalSwan-agent-skills
+17. Puck
+18. Radix-UI
+19. React-Cosmos
+20. React-Spectrum
+21. Silex
+22. Storybook
+23. TeleportHQ
+24. ToolJet
+25. TypeScript
+26. Vite
+27. VvvebJs
+28. Webstudio
+29. accessibility-skills
+30. anthropic-skills
+31. drawio
+32. frontend-audit-skill
+33. microsoft-skills
+34. nolly-agent-skills
+35. shadcn-ui
+36. tldraw
+37. ui-ux-pro-max-skill
+38. wordpress-agent-skills
+39. xyflow
+
+## Ampliación posterior del Director
+Hay instrucción posterior de grupos de 10 para catálogo nuevo; no se reinterpretó como autorización de omitir Cline o de cambiar el commit canónico.
+En reasoning_kernel/decision_on_demand/reasoning_modules solo se observó topological_sort.py.
+El run 33963292115 terminó success; no certifica los 105 componentes ni el cierre ZIP.
+No afirmar que se montaron 11 Actions para el catálogo: no se observaron en los 29 workflows actuales.
+
+## Refutaciones y checklist
+- Input: no confundir extracción con adquisición; plantillas fijadas no bastan para EXTRACT_ONLY.
+- Tareas: archivo/workflow presente o success de topological_sort no resuelve 39 árboles ausentes.
+- Cumplimiento: 03/04 se solaparon; no afirmar single_writer histórico.
+- Código canónico leído: sí.
+- Árbol completo de destino leído: sí.
+- Jobs actuales activos: 0 en snapshot consultado.
+- ZIPs eliminados: 0.
+- Workflows viejos modificados/reactivados en esta revisión: 0.
+- Investigación completada para todos los GAPs: NO.
+- remaining_component_gaps=39.
+- Cierre global: NO.
+
+### NCT-ZIP-REPAIR-05 — FAILED / CONTRACT_VIOLATION
+Inspección: 2026-09-05 12:58 UTC.
+Workflow/commit: https://github.com/maxbry123-commits/nct-core/commit/4fd6148b0cf59c14d85a4df5d90f8fbc49602099
+Run: https://github.com/maxbry123-commits/nct-core/actions/runs/33965037614
+Resultado: failure; publicación terminó con GH008 para OID d426d600fa80e9ac237cbad6b3f7f47a4aa2005d5218184e6b9565a8ee46d1ba; read-back skipped; Cline continúa ausente.
+Causa de control: el workflow ejecutó git lfs pull --include=assets/docs/demo.gif, contrario a la prohibición vigente; además git add volvió a convertir el GIF materializado en puntero por el filtro heredado.
+Estado: no reintentar Repair 05 ni crear un delta equivalente. remaining_component_gaps=39.
+
+### NCT-ZIP-BATCH-01-08 — BLOCKED / WORKFLOW_CONTRACT_GAP
+Inspección: 2026-09-05 13:58 UTC.
+Read-back de .github/workflows/nct-zip-extract-batch-01.yml a 08.yml: 8 archivos presentes, todos solo workflow_dispatch, cero runs asociados y cero jobs activos.
+Los 8 workflows ejecutan unzip sobre cada parte por separado; no reconstruyen las partes en orden natural antes de unzip -tq.
+Faltan inventario completo previo, CRC, guardas Zip Slip/symlink/especiales, presupuesto de expansión, hash determinista del árbol, inspección del índice staged, gate de blobs/punteros LFS y read-back remoto.
+La publicación usa git pull --rebase del commit generado, patrón prohibido por la sección 19 del skill; batch 01 incluye Cline, ya clasificado SOURCE_LFS_POINTER_GAP.
+Decisión: no despachar ni editar estos workflows y no reactivar repairs 01–05.
+Estado estable: remaining_component_gaps=39; control_gaps=2; historical_failed_runs separado.
+Catálogo: solo topological_sort.py verificado; 104/105 continúan abiertos.
