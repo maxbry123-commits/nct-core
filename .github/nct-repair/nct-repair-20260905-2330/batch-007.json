@@ -1,0 +1,45 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/RobotRaconteur-0.15.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/RobotRaconteur-0.15.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "28fc521312a9dfa82ba808efdffdc9dd8555851e",
+      "bytes": 12558554,
+      "status": "PREPARED",
+      "sha256": "7cbc71fbe230106c397bd590161770380447fdd915d7b87d698cf54f2ccebbd0"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/astropy-5.2.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/astropy-5.2.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "f73cab6eb8eca7b29b76c537c2e7c05243a00785",
+      "bytes": 25310373,
+      "status": "PREPARED",
+      "sha256": "402a3e18d67c21196220214597576e3616d2672d8dfbbc384a26012cf9e52404"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/biopython-1.81-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/biopython-1.81-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "d506338b88b355a4d6dfc9a170fc65d3bb81caf3",
+      "bytes": 11293073,
+      "status": "PREPARED",
+      "sha256": "8f713f270116305f272d17d035dfff81939c20d1c30b6f0367a9cb0c2e7e062b"
+    }
+  ]
+}
