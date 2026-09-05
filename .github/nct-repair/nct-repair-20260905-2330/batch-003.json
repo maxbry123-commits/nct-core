@@ -1,0 +1,84 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/turbo-windows-64-npm-1.13.4-333d09af0b-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/turbo-windows-64-npm-1.13.4-333d09af0b-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "92394a6e788e83f5cb12faa7bf1e274f290a078e",
+      "bytes": 9814076,
+      "status": "PREPARED",
+      "sha256": "972be194f68455d417466e2805a5e31678df442007a4b1d76d97526174ce24f9"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "docs/img/flexlayout-inspect.gif",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/docs/img/flexlayout-inspect.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "7522b3f6f6b0b66a279c9c04a43705088c451633",
+      "bytes": 9942122,
+      "status": "PREPARED",
+      "sha256": "25bffe168fbdc5314e594c660043d1e35ac12b229841aa65141477fceec26e0a"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "docs/img/plugins/deploy-cloudflare-dragdrop.mp4",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/docs/img/plugins/deploy-cloudflare-dragdrop.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "b10e2f8b13c45eaf6db401a35359dbfd2c8aa460",
+      "bytes": 8941204,
+      "status": "PREPARED",
+      "sha256": "777a480b67a271692def4c288c5b446679d653ca3c5a47148420b5999938e3ac"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "docs/img/plugins/deploy-cloudflare-repo.mp4",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/docs/img/plugins/deploy-cloudflare-repo.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "def5320325e625de001eb6ee34e4729c04825558",
+      "bytes": 9561806,
+      "status": "PREPARED",
+      "sha256": "275f24b4e281489a0aaa2d06550b711c932b1d4ab23d6c7650290ab418ec63f6"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "docs/img/plugins/deploy-netlify-dragdrop.mp4",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/docs/img/plugins/deploy-netlify-dragdrop.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "4171600a3ef7c9313324f2ba41ee45addfdf1bde",
+      "bytes": 10032864,
+      "status": "PREPARED",
+      "sha256": "79152a1dc49023abaca08cad50fc2694958f806dc33151adfc94f782f1965daf"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "docs/img/plugins/deploy-netlify-repo.mp4",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/docs/img/plugins/deploy-netlify-repo.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "40d4c29f2e122f7f5e64904f2120605946267507",
+      "bytes": 12835128,
+      "status": "PREPARED",
+      "sha256": "214270b554c049fa26f0ef530a9aba2ba875308519bfd9b4b5323d7fd59906fb"
+    }
+  ]
+}
