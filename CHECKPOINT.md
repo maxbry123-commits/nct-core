@@ -131,3 +131,13 @@ No afirmar que se montaron 11 Actions para el catálogo: no se observaron en los
 
 ## Control de continuidad
 El Watchdog GitHub GAP Loop fue deshabilitado por bloqueo de ejecución bajo el contrato fijado; los otros Watchdogs no fueron cambiados. Reanudar requiere una plantilla EXTRACT_ONLY compatible autorizada y coordinación de escritor único. No se declaró tarea completada.
+
+
+### NCT-ZIP-REPAIR-05 — FAILED / CONTRACT_VIOLATION
+Inspección: 2026-09-05 12:58 UTC.
+Workflow/commit: https://github.com/maxbry123-commits/nct-core/commit/4fd6148b0cf59c14d85a4df5d90f8fbc49602099
+Run: https://github.com/maxbry123-commits/nct-core/actions/runs/33965037614
+Resultado: failure; publicación terminó con GH008 para OID d426d600fa80e9ac237cbad6b3f7f47a4aa2005d5218184e6b9565a8ee46d1ba; read-back skipped; Cline continúa ausente.
+Causa de control: el workflow ejecutó `git lfs pull --include=assets/docs/demo.gif`, contrario a la prohibición vigente de recuperación por LFS/OID/media; además `git add` volvió a convertir el GIF materializado en puntero por el filtro heredado.
+Estado: no reintentar Repair 05 ni crear un delta equivalente. `remaining_component_gaps=39`.
+Contención: se pausaron los Watchdogs duplicados `GitHub GAP X-Ray` y `GitHub GAP LOOP 2`; `GitHub GAP Loop` ya estaba pausado. Este ledger no certifica cierre ni autoriza LFS.
