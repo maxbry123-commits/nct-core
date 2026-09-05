@@ -1,0 +1,192 @@
+# Base de ejecución: skill lock exacto + cola secuencial. No se modifica el extractor canónico.
+name: NCT ZIP Pending 39 Queue
+run-name: NCT ZIP Pending 39 Queue • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-zip-pending-39-queue.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_TERMINAL_PROMPT: "0"
+  LOCKED_SKILL_BLOB: 082e6f63980aff5e457837a3030af37892a7e069
+  ROOT: Componentes open soure nct
+  CLINE_SOURCE_REPO: https://github.com/cline/cline.git
+  CLINE_SOURCE_COMMIT: 48d63852745460ff0fa3dfcc0457bbe2493841de
+  CLINE_LFS_PATH: assets/docs/demo.gif
+  CLINE_LFS_OID: d426d600fa80e9ac237cbad6b3f7f47a4aa2005d5218184e6b9565a8ee46d1ba
+  CLINE_LFS_SIZE: "19108207"
+
+concurrency:
+  group: nct-algorithms-copy-queue
+  cancel-in-progress: false
+
+jobs:
+  extract-39-in-queue:
+    name: 39 ZIPs sequential queue
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: true
+
+      - name: Copy exact skill extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/skill-lock/extract_existing_parts.py
+          test "$(git hash-object scripts/skill-lock/extract_existing_parts.py)" = "$LOCKED_SKILL_BLOB"
+          mkdir -p _work/skill
+          cp -a scripts/skill-lock/extract_existing_parts.py _work/skill/extract_existing_parts.py
+          test "$(git hash-object _work/skill/extract_existing_parts.py)" = "$LOCKED_SKILL_BLOB"
+          python3 -m py_compile _work/skill/extract_existing_parts.py
+          echo "SKILL_COPY_PASS blob=$LOCKED_SKILL_BLOB"
+
+      - name: Extract and publish 38 standard components sequentially
+        shell: bash
+        run: |
+          set -euo pipefail
+          components=(
+            Craft.js Frappe-Builder GrapesJS MUSE
+            Mermaid Mitosis Motion Onlook OpenDesign
+            OpenPencil Parcel Penpot PlantUML Plasmic
+            PracticalSwan-agent-skills Puck Radix-UI React-Cosmos React-Spectrum
+            Silex Storybook TeleportHQ ToolJet TypeScript
+            Vite VvvebJs Webstudio accessibility-skills anthropic-skills
+            drawio frontend-audit-skill microsoft-skills nolly-agent-skills shadcn-ui
+            tldraw ui-ux-pro-max-skill wordpress-agent-skills xyflow
+          )
+          test "${#components[@]}" -eq 38
+          : > _work/standard_failures.txt
+          for component in "${components[@]}"; do
+            echo "===== QUEUE component=$component ====="
+            if test -f "$ROOT/$component/SOURCE_SHA256SUMS.txt"; then
+              if (cd "$ROOT/$component" && sha256sum -c SOURCE_SHA256SUMS.txt >/dev/null); then
+                echo "ALREADY_VERIFIED component=$component"
+                continue
+              fi
+            fi
+            meta="$(jq -sc --arg slug "$component" '[.[] | select(.slug==$slug and .status=="COMPLETE")][-1]' "$ROOT/RESEARCH_DOWNLOAD_MANIFEST.jsonl")"
+            if test "$meta" = "null"; then
+              echo "$component|MANIFEST_GAP" | tee -a _work/standard_failures.txt
+              continue
+            fi
+            source_url="$(jq -r '.source' <<<"$meta")"
+            source_commit="$(jq -r '.source_commit' <<<"$meta")"
+            expected_parts="$(jq -r '.parts' <<<"$meta")"
+            if ! python3 _work/skill/extract_existing_parts.py "$ROOT" "$component" "$source_url" "$source_commit" UNKNOWN "$expected_parts"; then
+              echo "$component|EXTRACT_GAP" | tee -a _work/standard_failures.txt
+              continue
+            fi
+            git fetch origin main
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "PUBLISH_SNAPSHOT_STALE_GAP component=$component"; exit 42; }
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -- "$ROOT/$component"
+            if git diff --cached --quiet; then
+              echo "NO_CHANGE component=$component"
+              continue
+            fi
+            git commit -m "build(nct): extract verified ZIP component $component"
+            git push --no-verify origin HEAD:main
+          done
+          if test -s _work/standard_failures.txt; then
+            echo 'STANDARD_COMPONENT_GAPS:'
+            cat _work/standard_failures.txt
+          fi
+
+      - name: Extract Cline last with verified LFS input and unchanged skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f "$ROOT/Cline/SOURCE_SHA256SUMS.txt" && (cd "$ROOT/Cline" && sha256sum -c SOURCE_SHA256SUMS.txt >/dev/null); then
+            echo 'ALREADY_VERIFIED component=Cline'
+            exit 0
+          fi
+          rm -rf _cline_source _stage_parts
+          GIT_LFS_SKIP_SMUDGE=1 git clone --quiet --filter=blob:none --no-checkout "$CLINE_SOURCE_REPO" _cline_source
+          git -C _cline_source checkout --quiet "$CLINE_SOURCE_COMMIT"
+          git -C _cline_source lfs pull --include="$CLINE_LFS_PATH" --exclude=''
+          test -f "_cline_source/$CLINE_LFS_PATH"
+          test "$(stat -c %s "_cline_source/$CLINE_LFS_PATH")" = "$CLINE_LFS_SIZE"
+          test "$(sha256sum "_cline_source/$CLINE_LFS_PATH" | awk '{print $1}')" = "$CLINE_LFS_OID"
+          mkdir _stage_parts
+          cp "$ROOT"/Cline_*.zip _stage_parts/
+          python3 - <<'PY'
+          import pathlib, zipfile
+          root = pathlib.Path('_stage_parts')
+          replacement = pathlib.Path('_cline_source/assets/docs/demo.gif').read_bytes()
+          target = 'Cline/assets/docs/demo.gif'
+          hits = 0
+          for src in sorted(root.glob('Cline_*.zip')):
+              with zipfile.ZipFile(src, 'r') as zin:
+                  if target not in zin.namelist():
+                      continue
+                  hits += 1
+                  tmp = src.with_suffix('.zip.tmp')
+                  with zipfile.ZipFile(tmp, 'w') as zout:
+                      for info in zin.infolist():
+                          data = replacement if info.filename == target else zin.read(info.filename)
+                          zout.writestr(info, data)
+                  tmp.replace(src)
+          if hits != 1:
+              raise SystemExit(f'LFS_ARCHIVE_MEMBER_GAP hits={hits} target={target}')
+          print(f'EPHEMERAL_ZIP_PATCH_VERIFIED hits={hits} target={target}')
+          PY
+          python3 _work/skill/extract_existing_parts.py _stage_parts Cline "$CLINE_SOURCE_REPO" "$CLINE_SOURCE_COMMIT" Apache-2.0 3
+          test "$(stat -c %s '_stage_parts/Cline/assets/docs/demo.gif')" = "$CLINE_LFS_SIZE"
+          test "$(sha256sum '_stage_parts/Cline/assets/docs/demo.gif' | awk '{print $1}')" = "$CLINE_LFS_OID"
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo 'PUBLISH_SNAPSHOT_STALE_GAP component=Cline'; exit 42; }
+          rm -rf "$ROOT/Cline"
+          cp -a _stage_parts/Cline "$ROOT/Cline"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- "$ROOT/Cline"
+          git diff --cached --quiet || {
+            git commit -m 'build(nct): extract verified ZIP component Cline'
+            git push --no-verify origin HEAD:main
+          }
+
+      - name: Final read-back 39/39
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          components=(
+            Cline Craft.js Frappe-Builder GrapesJS MUSE
+            Mermaid Mitosis Motion Onlook OpenDesign
+            OpenPencil Parcel Penpot PlantUML Plasmic
+            PracticalSwan-agent-skills Puck Radix-UI React-Cosmos React-Spectrum
+            Silex Storybook TeleportHQ ToolJet TypeScript
+            Vite VvvebJs Webstudio accessibility-skills anthropic-skills
+            drawio frontend-audit-skill microsoft-skills nolly-agent-skills shadcn-ui
+            tldraw ui-ux-pro-max-skill wordpress-agent-skills xyflow
+          )
+          test "${#components[@]}" -eq 39
+          failed=0
+          for component in "${components[@]}"; do
+            if ! test -f "$ROOT/$component/SOURCE_SHA256SUMS.txt"; then
+              echo "FINAL_MISSING_GAP component=$component"
+              failed=1
+              continue
+            fi
+            if ! (cd "$ROOT/$component" && sha256sum -c SOURCE_SHA256SUMS.txt >/dev/null); then
+              echo "FINAL_CHECKSUM_GAP component=$component"
+              failed=1
+              continue
+            fi
+            echo "FINAL_PASS component=$component"
+          done
+          test "$failed" -eq 0
+          echo 'VERIFIED_CLOSED ZIP_COMPONENTS=39/39'
