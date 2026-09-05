@@ -1,0 +1,45 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/scipy-1.9.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/scipy-1.9.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "bcf988941e01d71f9e507694a167c473d427c43b",
+      "bytes": 39342579,
+      "status": "PREPARED",
+      "sha256": "8a34a8a5988ca2c5277f55f5020b3181a9a39edd946c046ce79677744a2695d7"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/scipy-tests.tar",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/scipy-tests.tar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "93f28c89ae1ee249ddbbb8a8f92e65d4f7c874e9",
+      "bytes": 14940160,
+      "status": "PREPARED",
+      "sha256": "d858db64cc53e0b7888d1deab7ad77ce101a6d637378eb2105d4b5eb9da16b1b"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/statsmodels-0.13.5-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/statsmodels-0.13.5-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "db0a69fab474918b1bf885c89b92e4db00f0d889",
+      "bytes": 14317090,
+      "status": "PREPARED",
+      "sha256": "168573c13262792f96de003302a44f9a39b967730586b95ff45d448f6b664ac4"
+    }
+  ]
+}
