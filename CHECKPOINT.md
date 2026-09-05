@@ -6,6 +6,7 @@ Contrato canónico: https://github.com/maxbry123-commits/agentes/tree/c789e5fe63
 ## Estado honesto
 BLOCKED_PENDING_AUTHORIZED_TEMPLATE. No VERIFIED_CLOSED.
 265 partes ZIP, 43 grupos/componentes, 4 árboles presentes y 39 destinos de componente ausentes.
+La presencia de los 4 árboles NO certifica sus hashes ni su integridad.
 
 ## Inventario de destinos ausentes
 1. Cline
