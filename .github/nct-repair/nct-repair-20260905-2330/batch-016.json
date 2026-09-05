@@ -1,0 +1,84 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "drawio",
+      "parts": 7,
+      "path": "etc/build/compiler.jar",
+      "source_commit": "fea5e877f3e6f849331ad09894f7edb9771708fa",
+      "source_url": "https://github.com/jgraph/drawio.git",
+      "destination": "Componentes open soure nct/drawio/etc/build/compiler.jar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "bb85b3f0e0e1628f2b21e7c04bdf707d66aba625",
+      "bytes": 13512691,
+      "status": "PREPARED",
+      "sha256": "85ad32fefa2a9d8a59ed598091f67faff230eca015fb610b39f582a458ce75de"
+    },
+    {
+      "component": "drawio",
+      "parts": 7,
+      "path": "src/main/webapp/js/app.min.js",
+      "source_commit": "fea5e877f3e6f849331ad09894f7edb9771708fa",
+      "source_url": "https://github.com/jgraph/drawio.git",
+      "destination": "Componentes open soure nct/drawio/src/main/webapp/js/app.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "4e86779fe0747c7e1bbccb6222ea76307354b918",
+      "bytes": 9615294,
+      "status": "PREPARED",
+      "sha256": "1b10bafea16133e7ba7ae5fb3e8086e0e7f379df77ad59f48c6deb966f474937"
+    },
+    {
+      "component": "drawio",
+      "parts": 7,
+      "path": "src/main/webapp/js/integrate.min.js",
+      "source_commit": "fea5e877f3e6f849331ad09894f7edb9771708fa",
+      "source_url": "https://github.com/jgraph/drawio.git",
+      "destination": "Componentes open soure nct/drawio/src/main/webapp/js/integrate.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "c0963d1abbea32837d219a4bf01c93992d413d39",
+      "bytes": 22409534,
+      "status": "PREPARED",
+      "sha256": "be45ab5b204046e4c3612bbe490d00104c7a07e10a30698145d6d22f0c4f41da"
+    },
+    {
+      "component": "wordpress-agent-skills",
+      "parts": 1,
+      "path": "claude-code/wp-site-creator/scripts/block-fixer/cli.js",
+      "source_commit": "ea902bd8301564fa33e336c34114ab121f24c800",
+      "source_url": "https://github.com/Automattic/wordpress-agent-skills.git",
+      "destination": "Componentes open soure nct/wordpress-agent-skills/claude-code/wp-site-creator/scripts/block-fixer/cli.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "d42c157934781d44dd1e1e90acdd36584486bba5",
+      "bytes": 9983814,
+      "status": "PREPARED",
+      "sha256": "eac5c1d7b3e44ad787220617f936e2c5a286f09af2f11e7199af27285327540c"
+    },
+    {
+      "component": "Aider",
+      "parts": 6,
+      "path": "aider/website/assets/aider-browser-social.mp4",
+      "source_commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "source_url": "https://github.com/Aider-AI/aider.git",
+      "destination": "Componentes open soure nct/Aider/aider/website/assets/aider-browser-social.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "73720e2d9a296412df970f53edbcae337308f7a5",
+      "bytes": 12945046,
+      "status": "PREPARED",
+      "sha256": "3b64465e237312de7c377b57a73c699bb2d6c68ea050e2802b06c5fabfbcae26"
+    },
+    {
+      "component": "Aider",
+      "parts": 6,
+      "path": "aider/website/assets/copypaste.mp4",
+      "source_commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "source_url": "https://github.com/Aider-AI/aider.git",
+      "destination": "Componentes open soure nct/Aider/aider/website/assets/copypaste.mp4",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "6e8ef4e8314953c1eb53a7571a935aca3a527083",
+      "bytes": 13679407,
+      "status": "PREPARED",
+      "sha256": "2662af552d354e584e9cafd9df50426181375b049d3b6160abc95fda16b2c1b0"
+    }
+  ]
+}
