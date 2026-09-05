@@ -1,1 +1,123 @@
-# placeholder
+# Descargar + extraer. Copia de skills/skills Github acción/Code Github acción descargar y extracción/gha-download-extract.yml
+# Extractor copiado sin reescribir: scripts/skill-lock/extract_existing_parts.py
+name: NCT ZIP Extract Queue 39
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nct-zip-extract-all-39.yml'
+permissions:
+  contents: write
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+  GIT_TERMINAL_PROMPT: "0"
+concurrency:
+  group: nct-core-mount-single-writer-main
+  cancel-in-progress: false
+jobs:
+  extract-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: true
+      - name: Enforce NO-LFS runner policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --local filter.lfs.clean cat
+          git config --local filter.lfs.smudge cat
+          git config --local --unset-all filter.lfs.process || true
+          git config --local filter.lfs.required false
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Gate locked skill extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/skill-lock/extract_existing_parts.py
+          test "$(git hash-object scripts/skill-lock/extract_existing_parts.py)" = "082e6f63980aff5e457837a3030af37892a7e069"
+          test -f 'Componentes open soure nct/RESEARCH_DOWNLOAD_MANIFEST.jsonl'
+      - name: Extract 39 pending components sequentially
+        shell: bash
+        run: |
+          set -uo pipefail
+          ROOT='Componentes open soure nct'
+          MANIFEST="$ROOT/RESEARCH_DOWNLOAD_MANIFEST.jsonl"
+          EXTRACTOR='scripts/skill-lock/extract_existing_parts.py'
+          failures=0
+          : > "$RUNNER_TEMP/nct-zip-39-failures.txt"
+          while IFS= read -r component; do
+            test -n "$component" || continue
+            row="$(jq -cr --arg slug "$component" 'select(.slug == $slug)' "$MANIFEST" | head -n 1)"
+            if test -z "$row"; then
+              echo "MANIFEST_GAP: $component" | tee -a "$RUNNER_TEMP/nct-zip-39-failures.txt"
+              failures=$((failures + 1))
+              continue
+            fi
+            source="$(jq -r '.source' <<<"$row")"
+            source_commit="$(jq -r '.source_commit' <<<"$row")"
+            parts="$(jq -r '.parts' <<<"$row")"
+            echo "QUEUE_COMPONENT=$component parts=$parts source_commit=$source_commit"
+            if python3 "$EXTRACTOR" "$ROOT" "$component" "$source" "$source_commit" UNKNOWN "$parts"; then
+              git add -- "$ROOT/$component"
+            else
+              rc=$?
+              echo "EXTRACT_GAP: $component rc=$rc" | tee -a "$RUNNER_TEMP/nct-zip-39-failures.txt"
+              failures=$((failures + 1))
+            fi
+          done <<'COMPONENTS'
+          Cline
+          Craft.js
+          Frappe-Builder
+          GrapesJS
+          MUSE
+          Mermaid
+          Mitosis
+          Motion
+          Onlook
+          OpenDesign
+          OpenPencil
+          Parcel
+          Penpot
+          PlantUML
+          Plasmic
+          PracticalSwan-agent-skills
+          Puck
+          Radix-UI
+          React-Cosmos
+          React-Spectrum
+          Silex
+          Storybook
+          TeleportHQ
+          ToolJet
+          TypeScript
+          Vite
+          VvvebJs
+          Webstudio
+          accessibility-skills
+          anthropic-skills
+          drawio
+          frontend-audit-skill
+          microsoft-skills
+          nolly-agent-skills
+          shadcn-ui
+          tldraw
+          ui-ux-pro-max-skill
+          wordpress-agent-skills
+          xyflow
+          COMPONENTS
+          echo "FAILURE_COUNT=$failures"
+          cat "$RUNNER_TEMP/nct-zip-39-failures.txt" || true
+          git diff --cached --quiet || git commit -m 'extract(nct): materialize pending ZIP component queue'
+          git push --no-verify origin HEAD:main
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          test "$failures" -eq 0
