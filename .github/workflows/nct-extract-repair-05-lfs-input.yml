@@ -1,0 +1,152 @@
+name: NCT Extract Repair 05 LFS Input
+run-name: NCT Extract Repair 05 LFS Input • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nct-extract-repair-05-lfs-input.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_TERMINAL_PROMPT: "0"
+  SOURCE_REPO: https://github.com/cline/cline.git
+  SOURCE_COMMIT: 48d63852745460ff0fa3dfcc0457bbe2493841de
+  LFS_PATH: assets/docs/demo.gif
+  LFS_OID: d426d600fa80e9ac237cbad6b3f7f47a4aa2005d5218184e6b9565a8ee46d1ba
+  LFS_SIZE: "19108207"
+  LOCKED_SKILL_BLOB: 082e6f63980aff5e457837a3030af37892a7e069
+
+concurrency:
+  group: nct-core-cline-repair-05-lfs-input
+  cancel-in-progress: false
+
+jobs:
+  repair-input-and-extract:
+    name: SANITIZE_INPUT → LOCKED_SKILL → READ_BACK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout destination main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+
+      - name: Gate locked skill and classify prior GAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/skill-lock/extract_existing_parts.py
+          test "$(git hash-object scripts/skill-lock/extract_existing_parts.py)" = "$LOCKED_SKILL_BLOB"
+          python3 -m py_compile scripts/skill-lock/extract_existing_parts.py
+          printf '%s\n' \
+            'CONTRACT=tel.workflow/v3' \
+            'INPUT_BLOCK=LITERAL' \
+            'GOALS=12/12' \
+            'PRIOR_GAP_CLASS=SKILL_INPUT_CONTRACT' \
+            'PRIOR_GAP=SOURCE_LFS_POINTER_GAP: assets/docs/demo.gif' \
+            'DELTA=materialize verified upstream LFS object in ephemeral staging; locked skill unchanged'
+
+      - name: Materialize exact upstream LFS object
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _cline_source
+          GIT_LFS_SKIP_SMUDGE=1 git clone --quiet --filter=blob:none --no-checkout "$SOURCE_REPO" _cline_source
+          git -C _cline_source checkout --quiet "$SOURCE_COMMIT"
+          git -C _cline_source lfs pull --include="$LFS_PATH" --exclude=''
+          test -f "_cline_source/$LFS_PATH"
+          test "$(stat -c %s "_cline_source/$LFS_PATH")" = "$LFS_SIZE"
+          test "$(sha256sum "_cline_source/$LFS_PATH" | awk '{print $1}')" = "$LFS_OID"
+          head -c 64 "_cline_source/$LFS_PATH" | grep -aFq 'version https://git-lfs.github.com/spec/v1' && { echo 'LFS_MATERIALIZATION_GAP'; exit 51; } || true
+          echo "LFS_OBJECT_VERIFIED oid=$LFS_OID size=$LFS_SIZE path=$LFS_PATH"
+
+      - name: Patch only the LFS pointer inside ephemeral ZIP staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _stage_parts
+          mkdir _stage_parts
+          cp 'Componentes open soure nct'/Cline_*.zip _stage_parts/
+          python3 - <<'PY'
+          import pathlib, zipfile, shutil, sys
+          root = pathlib.Path('_stage_parts')
+          replacement = pathlib.Path('_cline_source/assets/docs/demo.gif').read_bytes()
+          target = 'Cline/assets/docs/demo.gif'
+          hits = 0
+          for src in sorted(root.glob('Cline_*.zip')):
+              with zipfile.ZipFile(src, 'r') as zin:
+                  names = zin.namelist()
+                  if target not in names:
+                      continue
+                  hits += 1
+                  tmp = src.with_suffix('.zip.tmp')
+                  with zipfile.ZipFile(tmp, 'w') as zout:
+                      for info in zin.infolist():
+                          data = replacement if info.filename == target else zin.read(info.filename)
+                          zout.writestr(info, data)
+                  tmp.replace(src)
+          if hits != 1:
+              raise SystemExit(f'LFS_ARCHIVE_MEMBER_GAP hits={hits} target={target}')
+          print(f'EPHEMERAL_ZIP_PATCH_VERIFIED hits={hits} target={target}')
+          PY
+
+      - name: Execute unchanged locked canonical extract skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/skill-lock/extract_existing_parts.py \
+            '_stage_parts' \
+            'Cline' \
+            "$SOURCE_REPO" \
+            "$SOURCE_COMMIT" \
+            'Apache-2.0' \
+            '3'
+          test -d _stage_parts/Cline
+          test "$(stat -c %s '_stage_parts/Cline/assets/docs/demo.gif')" = "$LFS_SIZE"
+          test "$(sha256sum '_stage_parts/Cline/assets/docs/demo.gif' | awk '{print $1}')" = "$LFS_OID"
+          echo 'LOCKED_SKILL_PASS'
+
+      - name: Publish only verified delta from fresh snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo 'PUBLISH_SNAPSHOT_STALE_GAP'; exit 42; }
+          rm -rf 'Componentes open soure nct/Cline'
+          cp -a _stage_parts/Cline 'Componentes open soure nct/Cline'
+          rm -rf _stage_parts _cline_source
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- 'Componentes open soure nct/Cline'
+          git diff --cached --quiet && { echo 'NO_CHANGE_GAP'; exit 32; }
+          git diff --cached --stat
+          git commit -m 'build(nct): extract Cline with verified LFS input repair 05'
+          git push --no-verify origin HEAD:main
+
+      - name: Global cross-check and read-back
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          test -d 'Componentes open soure nct/Cline'
+          grep -Fx "$SOURCE_REPO" 'Componentes open soure nct/Cline/SOURCE_URL.txt'
+          grep -Fx "$SOURCE_COMMIT" 'Componentes open soure nct/Cline/SOURCE_COMMIT.txt'
+          grep -Fx 'Apache-2.0' 'Componentes open soure nct/Cline/SOURCE_LICENSE.txt'
+          test "$(stat -c %s 'Componentes open soure nct/Cline/assets/docs/demo.gif')" = "$LFS_SIZE"
+          test "$(sha256sum 'Componentes open soure nct/Cline/assets/docs/demo.gif' | awk '{print $1}')" = "$LFS_OID"
+          (cd 'Componentes open soure nct/Cline' && sha256sum -c SOURCE_SHA256SUMS.txt)
+          printf '%s\n' \
+            'AUDIT_INSTRUCTIONS_1=PASS' \
+            'AUDIT_INSTRUCTIONS_2=PASS' \
+            'AUDIT_INSTRUCTIONS_3=PASS' \
+            'REFUTATION_1=upstream object hash+size verified' \
+            'REFUTATION_2=locked skill blob unchanged and executed' \
+            'REFUTATION_3=post-push checksum read-back verified' \
+            'GLOBAL_CROSS_CHECK=PASS' \
+            'FINAL_CHECKLIST=PASS'
