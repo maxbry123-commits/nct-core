@@ -1,0 +1,607 @@
+import { UIDLUtils, StringUtils, GenericUtils, RoutePaths } from '@teleporthq/teleport-shared'
+import {
+  GeneratedFile,
+  GeneratedFolder,
+  UIDLElement,
+  ComponentUIDL,
+  ProjectUIDL,
+  UIDLConditionalNode,
+  ProjectStrategy,
+  UIDLPageOptions,
+  UIDLComponentOutputOptions,
+  UIDLExternalDependency,
+  ComponentGenerator,
+  ComponentPlugin,
+  PostProcessor,
+  Mapping,
+  StyleVariation,
+  GeneratorFactoryParams,
+  UIDLRouteDefinitions,
+} from '@teleporthq/teleport-types'
+import { elementNode } from '@teleporthq/teleport-uidl-builders'
+import importStatementsPlugin from '@teleporthq/teleport-plugin-import-statements'
+import { createComponentGenerator } from '@teleporthq/teleport-component-generator'
+import { basename } from 'path'
+
+export const createPageUIDLs = (uidl: ProjectUIDL, strategy: ProjectStrategy): ComponentUIDL[] => {
+  const routeNodes = UIDLUtils.extractRoutes(uidl.root)
+  return routeNodes.map((routeNode) => createPageUIDL(routeNode, uidl, strategy))
+}
+
+const createPageUIDL = (
+  routeNode: UIDLConditionalNode,
+  uidl: ProjectUIDL,
+  strategy: ProjectStrategy
+): ComponentUIDL => {
+  const { value, node, importDefinitions: rootNodeImportDefinitions } = routeNode.content
+  const pageName = value.toString()
+  const routeDefinition = uidl.root.stateDefinitions.route
+  const pagesStrategyOptions = strategy.pages.options || {}
+
+  const { pageOptions, isHomePage } = extractPageOptions(
+    routeDefinition,
+    pageName,
+    pagesStrategyOptions.useFileNameForNavigation
+  )
+
+  // Update pageOptions based on the values computed at the previous step
+  const pageDefinition = routeDefinition.values.find((route) => route.value === pageName)
+  pageDefinition.pageOptions = pageOptions
+
+  const {
+    fileName,
+    componentName,
+    pagination,
+    initialPropsData,
+    initialPathsData,
+    dynamicRouteAttribute,
+    detailsPageInfo,
+    navLink,
+  } = pageOptions
+
+  // If the file name will not be used as the path (eg: next, nuxt)
+  // And if the option to create each page in its folder is passed (eg: preact)
+  const createFolderForEachComponent =
+    !pagesStrategyOptions.useFileNameForNavigation &&
+    pagesStrategyOptions.createFolderForEachComponent
+
+  const { customComponentFileName, customStyleFileName, customTemplateFileName } =
+    pagesStrategyOptions
+
+  // a page can be: 'about-us.js' or `about-us/index.js`
+  const outputOptions = createFolderForEachComponent
+    ? {
+        componentName,
+        fileName:
+          (customComponentFileName && customComponentFileName(fileName, pageOptions)) || 'index',
+        styleFileName: (customStyleFileName && customStyleFileName(fileName)) || 'style',
+        templateFileName:
+          (customTemplateFileName && customTemplateFileName(fileName)) || 'template',
+        folderPath: [...navLink.split('/').slice(1, -1), fileName],
+      }
+    : {
+        componentName,
+        fileName:
+          (customComponentFileName && customComponentFileName(fileName, pageOptions)) || fileName,
+        styleFileName: (customStyleFileName && customStyleFileName(fileName)) || fileName,
+        templateFileName: (customTemplateFileName && customTemplateFileName(fileName)) || fileName,
+        folderPath: [...navLink.split('/').slice(1, -1)],
+      }
+
+  // Looking into the state definition, we take the seo information for the corresponding page
+  // If no title is provided for the page, the global settings title is passed as a default
+  const title = (pageDefinition.seo && pageDefinition.seo.title) || uidl.globals.settings.title
+  const seo = {
+    ...pageDefinition.seo,
+    title,
+  }
+
+  // Because conditional nodes accept any type of UIDLNode as a child
+  // we need to ensure that the page is always of type 'element'
+  // The solution is to wrap a non-element node with a 'group' element
+  const pageContent = node.type === 'element' ? node : elementNode('group', {}, [node])
+
+  const pageUIDL: ComponentUIDL = {
+    name: componentName,
+    node: pageContent,
+    outputOptions: {
+      ...outputOptions,
+      initialPropsData,
+      initialPathsData,
+      dynamicRouteAttribute,
+      // Table/data-source metadata for the row this page reads — the only
+      // reliable, layout-agnostic signal for whether a same-page mutation
+      // workflow can invalidate what this page's own getStaticProps just
+      // fetched (see `pageHasSameTableMutationWorkflow` in
+      // teleport-plugin-next-static-props / -static-paths).
+      detailsPageInfo,
+      pagination,
+      pageId: pageDefinition?.pageId,
+    },
+    propDefinitions: pageOptions.propDefinitions,
+    stateDefinitions: pageOptions.stateDefinitions,
+    seo,
+  }
+
+  /* Adding all kinds of peer dependencies and importing css only files
+   are good to be added in router. So, for projects which don't follow that
+   We will use since we don't generate any router */
+
+  /* Fow now frameworks which follow file name for navigation
+   have such constaraints like placing all css imports in some other files */
+  if (isHomePage && strategy.pages?.options?.useFileNameForNavigation) {
+    const { importDefinitions = {} } = uidl.root
+
+    pageUIDL.importDefinitions = Object.keys(importDefinitions).reduce(
+      (acc: Record<string, UIDLExternalDependency>, importRef) => {
+        if (
+          strategy.framework?.externalStyles &&
+          importDefinitions[importRef].path.endsWith('.css')
+        ) {
+          return acc
+        }
+        acc[importRef] = importDefinitions[importRef]
+        return acc
+      },
+      {}
+    )
+  }
+
+  pageUIDL.importDefinitions = {
+    ...pageUIDL.importDefinitions,
+    ...rootNodeImportDefinitions,
+  }
+
+  if (isHomePage && !strategy.pages?.options?.useFileNameForNavigation) {
+    const { importDefinitions = {} } = uidl.root
+    pageUIDL.importDefinitions = Object.keys(importDefinitions).reduce(
+      (acc: Record<string, UIDLExternalDependency>, importRef) => {
+        if (!importDefinitions[importRef].meta?.importJustPath) {
+          acc[importRef] = importDefinitions[importRef]
+        }
+        return acc
+      },
+      {}
+    )
+  }
+
+  return pageUIDL
+}
+
+/**
+ * A couple of different cases which need to be handled
+ * In case of next/nuxt generators, the file names represent the urls of the pages
+ * Also the root path needs to be represented by the index file
+ */
+export const extractPageOptions = (
+  routeDefinitions: UIDLRouteDefinitions,
+  routeName: string,
+  useFileNameForNavigation = false
+): { pageOptions: UIDLPageOptions; isHomePage: boolean } => {
+  const isHomePage = routeDefinitions.defaultValue === routeName
+  const pageDefinitions = routeDefinitions.values || []
+  const pageDefinition = pageDefinitions.find((stateDef) => stateDef.value === routeName)
+
+  // If no meta object is defined, the stateName is used
+  const defaultPageName = 'AppPage'
+
+  const splittedRouteName = routeName.split('/')
+  const fileName =
+    useFileNameForNavigation && splittedRouteName.length > 1 ? splittedRouteName.pop() : routeName
+
+  const friendlyStateName = StringUtils.removeIllegalCharacters(fileName) || defaultPageName // remove space, leading numbers, etc.
+  const friendlyComponentName = StringUtils.dashCaseToUpperCamelCase(friendlyStateName) // component name in UpperCamelCase
+  const friendlyFileName = StringUtils.camelCaseToDashCase(friendlyStateName) // file name in dash-case
+
+  let pageOptions: UIDLPageOptions = {
+    // default values extracted from state name
+    fileName: basename(friendlyFileName),
+    componentName: friendlyComponentName,
+    ...(pageDefinition?.pageOptions?.pagination && {
+      pagination: pageDefinition.pageOptions.pagination,
+    }),
+    ...(pageDefinition?.pageOptions?.initialPropsData && {
+      initialPropsData: pageDefinition?.pageOptions?.initialPropsData,
+    }),
+    ...(pageDefinition?.pageOptions?.initialPathsData && {
+      initialPathsData: pageDefinition?.pageOptions?.initialPathsData,
+    }),
+    navLink: pageDefinition?.pageOptions?.fallback
+      ? '**'
+      : '/' + (isHomePage ? '' : basename(friendlyFileName)),
+  }
+
+  if (pageDefinition && pageDefinition.pageOptions) {
+    // The pageDefinition values have precedence, defaults are fallbacks
+    pageOptions = {
+      ...pageOptions,
+      ...pageDefinition.pageOptions,
+    }
+  }
+
+  if (pageOptions.dynamicRouteAttribute && !pageOptions.navLink && !isHomePage) {
+    const routeSegments = routeName.split('/')
+    const staticPath =
+      routeSegments.length > 1 ? routeSegments.slice(0, -1).join('/') : basename(friendlyFileName)
+    pageOptions.navLink = `/${staticPath}/[${pageOptions.dynamicRouteAttribute}]`
+  }
+
+  const otherPages = pageDefinitions.filter((page) => page.value !== routeName && page.pageOptions)
+  deduplicatePageOptionValues(
+    pageOptions,
+    otherPages.map((page) => page.pageOptions)
+  )
+
+  // In case of next/nuxt, the path dictates the file name, so this is adjusted accordingly
+  // Also, the defaultPage has to be index, overriding any other value set
+  if (useFileNameForNavigation) {
+    const navFileName = pageOptions.navLink.replace('/', '')
+    pageOptions.fileName = pageOptions?.fallback
+      ? '404'
+      : isHomePage
+      ? 'index'
+      : basename(navFileName)
+  }
+
+  return { pageOptions, isHomePage }
+}
+
+export const prepareComponentOutputOptions = (
+  components: Record<string, ComponentUIDL>,
+  strategy: ProjectStrategy
+) => {
+  const componentStrategyOptions = strategy.components.options || {}
+
+  Object.keys(components).forEach((componentKey) => {
+    const component = components[componentKey]
+
+    // values coming from the input UIDL
+    const { fileName, componentClassName } = component.outputOptions || {
+      fileName: '',
+      componentClassName: '',
+    }
+
+    const defaultComponentName = 'AppComponent'
+    const friendlyName = StringUtils.removeIllegalCharacters(component.name) || defaultComponentName
+    const friendlyFileName = fileName || StringUtils.camelCaseToDashCase(friendlyName) // ex: primary-button
+    const friendlyComponentName =
+      componentClassName || StringUtils.dashCaseToUpperCamelCase(friendlyName) // ex: PrimaryButton
+
+    const folderPath = UIDLUtils.getComponentFolderPath(component)
+
+    const { customComponentFileName, customStyleFileName, customTemplateFileName } =
+      componentStrategyOptions
+
+    // If the component has its own folder, name is 'index' or an override from the strategy.
+    // In this case, the file name (dash converted) is used as the folder name
+    if (componentStrategyOptions.createFolderForEachComponent) {
+      component.outputOptions = {
+        componentClassName: friendlyComponentName,
+        fileName: (customComponentFileName && customComponentFileName(friendlyFileName)) || 'index',
+        styleFileName: (customStyleFileName && customStyleFileName(friendlyFileName)) || 'style',
+        templateFileName:
+          (customTemplateFileName && customTemplateFileName(friendlyFileName)) || 'template',
+        folderPath: [...folderPath, friendlyFileName],
+      }
+    } else {
+      component.outputOptions = {
+        componentClassName: friendlyComponentName,
+        fileName:
+          (customComponentFileName && customComponentFileName(friendlyFileName)) ||
+          friendlyFileName,
+        styleFileName:
+          (customStyleFileName && customStyleFileName(friendlyFileName)) || friendlyFileName,
+        templateFileName:
+          (customTemplateFileName && customTemplateFileName(friendlyFileName)) || friendlyFileName,
+        folderPath,
+      }
+    }
+
+    const otherComponents = Object.keys(components).filter(
+      (key) => key !== componentKey && components[key].outputOptions
+    )
+    deduplicateComponentOutputOptions(
+      component.outputOptions,
+      otherComponents.map((key) => components[key].outputOptions)
+    )
+  })
+}
+
+const deduplicatePageOptionValues = (options: UIDLPageOptions, otherOptions: UIDLPageOptions[]) => {
+  let navlinkSuffix = 0
+  // A navLink is a ROUTE, not a plain string: its suffix goes on the last
+  // literal segment so a trailing `[id]` stays a route parameter. See
+  // `RoutePaths.appendRouteDisambiguator` for the build failure this prevents.
+  while (
+    otherOptions.some(
+      (opt) => opt.navLink === RoutePaths.appendRouteDisambiguator(options.navLink, navlinkSuffix)
+    )
+  ) {
+    navlinkSuffix++
+  }
+
+  if (navlinkSuffix > 0) {
+    options.navLink = RoutePaths.appendRouteDisambiguator(options.navLink, navlinkSuffix)
+    console.warn(
+      `Potential duplication solved by appending '${navlinkSuffix}' to the navlink: ${options.navLink}`
+    )
+  }
+
+  let componentNameSuffix = 0
+  while (
+    otherOptions.some(
+      (opt) => opt.componentName === appendSuffix(options.componentName, componentNameSuffix)
+    )
+  ) {
+    componentNameSuffix++
+  }
+
+  if (componentNameSuffix > 0) {
+    options.componentName = appendSuffix(options.componentName, componentNameSuffix)
+    console.warn(
+      `Potential duplication solved by appending '${componentNameSuffix}' to the componentName: ${options.componentName}`
+    )
+  }
+
+  let fileNameSuffix = 0
+  /*
+    With the nested routes change, the navLink also define the location in which the file is going to exist.
+    So, we should take that too into consideration and then chagne the file name accordingly.
+    Check Line:80 from the same file.
+  */
+  while (
+    otherOptions.some(
+      (opt) =>
+        opt.fileName === appendSuffix(options.fileName, fileNameSuffix) &&
+        opt.navLink === options.navLink
+    )
+  ) {
+    fileNameSuffix++
+  }
+
+  if (fileNameSuffix > 0) {
+    options.fileName = appendSuffix(options.fileName, fileNameSuffix)
+    console.warn(
+      `Potential duplication solved by appending '${fileNameSuffix}' to the fileName: ${options.fileName}`
+    )
+  }
+}
+
+const deduplicateComponentOutputOptions = (
+  options: UIDLComponentOutputOptions,
+  otherOptions: UIDLComponentOutputOptions[]
+) => {
+  let componentNameSuffix = 0
+  while (
+    otherOptions.some(
+      (opt) =>
+        opt.componentClassName === appendSuffix(options.componentClassName, componentNameSuffix) &&
+        equalPaths(opt.folderPath, options.folderPath)
+    )
+  ) {
+    componentNameSuffix++
+  }
+
+  if (componentNameSuffix > 0) {
+    options.componentClassName = appendSuffix(options.componentClassName, componentNameSuffix)
+    console.warn(
+      `Potential duplication solved by appending a '${componentNameSuffix}' to the component class name: ${options.componentClassName}`
+    )
+  }
+
+  let fileNameSuffix = 0
+  while (
+    otherOptions.some(
+      (opt) =>
+        opt.fileName === appendSuffix(options.fileName, fileNameSuffix) &&
+        equalPaths(opt.folderPath, options.folderPath)
+    )
+  ) {
+    fileNameSuffix++
+  }
+
+  if (fileNameSuffix > 0) {
+    options.fileName = appendSuffix(options.fileName, fileNameSuffix)
+    options.styleFileName = appendSuffix(options.styleFileName, fileNameSuffix)
+    options.templateFileName = appendSuffix(options.templateFileName, fileNameSuffix)
+    console.warn(
+      `Potential duplication solved by appending a '${fileNameSuffix}' to the file name: ${options.fileName}`
+    )
+  }
+}
+
+const appendSuffix = (str: string, suffix: number) => {
+  const stringSuffix = suffix === 0 ? '' : suffix.toString()
+  return str + stringSuffix
+}
+
+const equalPaths = (path1: string[], path2: string[]) => {
+  return JSON.stringify(path1) === JSON.stringify(path2)
+}
+
+export const resolveLocalDependencies = (
+  pageUIDLs: ComponentUIDL[],
+  components: Record<string, ComponentUIDL>,
+  strategy: ProjectStrategy
+) => {
+  pageUIDLs.forEach((pageUIDL) => {
+    const pagePath = UIDLUtils.getComponentFolderPath(pageUIDL)
+    const fromPath = strategy.pages.path.concat(pagePath)
+    UIDLUtils.traverseElements(pageUIDL.node, (element) => {
+      if (isLocalDependency(element)) {
+        setLocalDependencyPath(element, components, fromPath, strategy.components.path)
+      }
+    })
+  })
+
+  Object.keys(components).forEach((componentKey) => {
+    const component = components[componentKey]
+    const componentPath = UIDLUtils.getComponentFolderPath(component)
+    const fromPath = strategy.components.path.concat(componentPath)
+
+    UIDLUtils.traverseElements(component.node, (element) => {
+      if (isLocalDependency(element)) {
+        setLocalDependencyPath(element, components, fromPath, strategy.components.path)
+      }
+    })
+  })
+}
+
+const isLocalDependency = (element: UIDLElement) =>
+  element.dependency && element.dependency.type === 'local'
+
+const setLocalDependencyPath = (
+  element: UIDLElement,
+  components: Record<string, ComponentUIDL>,
+  fromPath: string[],
+  toBasePath: string[]
+) => {
+  const componentKey = element.semanticType || element.elementType
+  const component = components[componentKey]
+  const componentPath = UIDLUtils.getComponentFolderPath(component)
+  const componentClassName = UIDLUtils.getComponentClassName(component)
+
+  const toPath = toBasePath.concat(componentPath)
+
+  const importFileName = UIDLUtils.getComponentFileName(component)
+  const importPath = GenericUtils.generateLocalDependenciesPrefix(fromPath, toPath)
+
+  element.dependency.path = `${importPath}${importFileName}`
+  element.elementType = 'component'
+  element.semanticType = componentClassName
+}
+
+export const fileFileAndReplaceContent = (
+  files: GeneratedFile[],
+  fileName: string,
+  content: string
+): GeneratedFile[] => {
+  Object.values(files).forEach((file: GeneratedFile) => {
+    if (file.name === fileName) {
+      file.content = content.concat(file.content)
+    }
+  })
+  return files
+}
+
+export const generateExternalCSSImports = async (uidl: ComponentUIDL) => {
+  const { importDefinitions = {} } = uidl
+
+  const styleImports = Object.keys(importDefinitions || {}).reduce(
+    (acc: Record<string, UIDLExternalDependency>, importRef) => {
+      const importedPackage = importDefinitions[importRef]
+      if (importedPackage.path.endsWith('.css')) {
+        acc[importRef] = importDefinitions[importRef]
+        return acc
+      }
+      return acc
+    },
+    {}
+  )
+
+  const generator = createComponentGenerator()
+  const { chunks } = await importStatementsPlugin({
+    uidl: null,
+    dependencies: styleImports,
+    options: {
+      extractedResources: {},
+    },
+    chunks: [],
+  })
+
+  return generator.linkCodeChunks({ imports: chunks }, 'imports')
+}
+
+export const injectFilesToPath = (
+  rootFolder: GeneratedFolder,
+  path: string[],
+  files: GeneratedFile[]
+): void => {
+  if (path.length === 1 && path[0] === '') {
+    rootFolder.files.push(...files)
+    return
+  }
+
+  let folder = findFolderByPath(rootFolder, path)
+
+  if (!folder) {
+    folder = createFolderInPath(rootFolder, path)
+  }
+
+  files.forEach((fileToInject) => {
+    const existingFile = findFileInFolder(fileToInject, folder)
+    if (existingFile) {
+      existingFile.content = fileToInject.content
+      existingFile.contentEncoding = fileToInject.contentEncoding
+    } else {
+      folder.files.push(fileToInject)
+    }
+  })
+}
+
+const createFolderInPath = (rootFolder: GeneratedFolder, folderPath: string[]): GeneratedFolder => {
+  let currentFolder = rootFolder
+  let createdFolder: GeneratedFolder
+
+  folderPath.forEach((path, index) => {
+    let intermediateFolder = findSubFolderByName(currentFolder, path)
+
+    if (!intermediateFolder) {
+      intermediateFolder = { name: path, files: [], subFolders: [] }
+      currentFolder.subFolders.push(intermediateFolder)
+    }
+    currentFolder = intermediateFolder
+
+    if (index === folderPath.length - 1) {
+      createdFolder = currentFolder
+    }
+  })
+
+  return createdFolder
+}
+
+const findFolderByPath = (rootFolder: GeneratedFolder, folderPath: string[]): GeneratedFolder => {
+  if (!folderPath || !folderPath.length) {
+    return rootFolder
+  }
+
+  const folderPathClone = JSON.parse(JSON.stringify(folderPath))
+  const path = folderPathClone.shift()
+
+  const subFolder = findSubFolderByName(rootFolder, path)
+  return subFolder ? findFolderByPath(subFolder, folderPathClone) : null
+}
+
+const findSubFolderByName = (rootFolder: GeneratedFolder, folderName: string): GeneratedFolder => {
+  return rootFolder.subFolders.find((folder) => {
+    return folder.name === folderName
+  })
+}
+
+const findFileInFolder = (file: GeneratedFile, folder: GeneratedFolder) => {
+  return folder.files.find((f) => f.name === file.name && f.fileType === file.fileType)
+}
+
+export const bootstrapGenerator = (
+  {
+    generator,
+    plugins = [],
+    postprocessors = [],
+    mappings = [],
+  }: {
+    generator: (params: GeneratorFactoryParams) => ComponentGenerator
+    plugins?: ComponentPlugin[]
+    postprocessors?: PostProcessor[]
+    mappings?: Mapping[]
+  },
+  style?: StyleVariation,
+  strictHtmlWhitespaceSensitivity?: boolean
+): ComponentGenerator => {
+  return generator({
+    plugins,
+    postprocessors,
+    mappings,
+    ...(style && { variation: style }),
+    strictHtmlWhitespaceSensitivity,
+  })
+}

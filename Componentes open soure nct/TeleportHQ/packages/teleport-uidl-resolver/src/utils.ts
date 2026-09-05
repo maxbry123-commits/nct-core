@@ -1,0 +1,840 @@
+import { UIDLUtils, StringUtils } from '@teleporthq/teleport-shared'
+import {
+  UIDLEventDefinitions,
+  UIDLElement,
+  UIDLNode,
+  UIDLDependency,
+  UIDLRepeatContent,
+  UIDLAttributeValue,
+  Mapping,
+  GeneratorOptions,
+  ComponentUIDL,
+  UIDLElementNode,
+  UIDLStyleSetTokenReference,
+  UIDLStaticValue,
+  UIDLDynamicReference,
+  UIDLConditionalNode,
+  ElementsLookup,
+} from '@teleporthq/teleport-types'
+import deepmerge from 'deepmerge'
+
+const STYLE_PROPERTIES_WITH_URL = ['background', 'backgroundImage']
+
+const createLookupKey = (compName: string, elementName: string) =>
+  StringUtils.camelCaseToDashCase(
+    `${StringUtils.removeIllegalCharacters(compName)}${StringUtils.dashCaseToUpperCamelCase(
+      StringUtils.removeIllegalCharacters(elementName)
+    )}`
+  )
+
+export const mergeMappings = (
+  oldMapping: Mapping,
+  newMapping?: Mapping,
+  deepMerge = false
+): Mapping => {
+  if (!newMapping) {
+    return oldMapping
+  }
+
+  if (deepMerge === true) {
+    return deepmerge(oldMapping, newMapping)
+  }
+
+  return {
+    elements: { ...oldMapping.elements, ...newMapping.elements },
+    events: { ...oldMapping.events, ...newMapping.events },
+    attributes: { ...oldMapping.attributes, ...newMapping.attributes },
+    illegalClassNames: [
+      ...(oldMapping.illegalClassNames || []),
+      ...(newMapping.illegalClassNames || []),
+    ],
+    illegalPropNames: [
+      ...(oldMapping.illegalPropNames || []),
+      ...(newMapping.illegalPropNames || []),
+    ],
+  }
+}
+
+export const resolveMetaTags = (uidl: ComponentUIDL, options: GeneratorOptions) => {
+  if (!uidl.seo || !uidl.seo.metaTags || !options.assets) {
+    return
+  }
+
+  uidl.seo.metaTags.forEach((tag) => {
+    Object.keys(tag).forEach((key) => {
+      tag[key] = UIDLUtils.prefixAssetsPath(tag[key] as string, options.assets)
+    })
+  })
+}
+
+const hoistLoadingFromRepeaterToDataSource = (uidlNode: UIDLNode) => {
+  UIDLUtils.traverseNodes(uidlNode, (node) => {
+    if (node.type === 'data-source-list' || node.type === 'data-source-item') {
+      const dataSourceNode = node as any
+
+      if (!dataSourceNode.content) {
+        return
+      }
+
+      const children = dataSourceNode.children || []
+
+      for (const child of children) {
+        if (child.type === 'cms-list-repeater' && child.content?.nodes?.loading) {
+          if (!dataSourceNode.content.nodes) {
+            dataSourceNode.content.nodes = {}
+          }
+
+          if (
+            !dataSourceNode.content.nodes.loading &&
+            child.content.nodes.loading.content?.children?.length > 0
+          ) {
+            dataSourceNode.content.nodes.loading = child.content.nodes.loading
+          }
+
+          break
+        }
+      }
+
+      if (dataSourceNode.content.nodes?.success?.content?.children) {
+        for (const child of dataSourceNode.content.nodes.success.content.children) {
+          if (child.type === 'cms-list-repeater' && child.content?.nodes?.loading) {
+            if (
+              !dataSourceNode.content.nodes.loading &&
+              child.content.nodes.loading.content?.children?.length > 0
+            ) {
+              dataSourceNode.content.nodes.loading = child.content.nodes.loading
+            }
+
+            break
+          }
+        }
+      }
+    }
+  })
+}
+
+export const resolveNode = (uidlNode: UIDLNode, options: GeneratorOptions) => {
+  hoistLoadingFromRepeaterToDataSource(uidlNode)
+
+  UIDLUtils.traverseNodes(uidlNode, (node, parentNode) => {
+    if (node.type === 'element') {
+      resolveElement(node.content, options)
+    }
+
+    if (node.type === 'repeat') {
+      resolveRepeat(node.content, parentNode)
+    }
+
+    if (node.type === 'cms-list-repeater' || node.type === 'cms-list' || node.type === 'cms-item') {
+      const {
+        mapping: { elements: elementsMapping },
+      } = options
+      const element: UIDLElement = node.content
+      const mappedElement = elementsMapping[element.elementType] || {
+        elementType: element.semanticType ?? element.elementType,
+      }
+
+      node.content.elementType = mappedElement.elementType
+      node.content.name = node.content?.name || node.type
+
+      if (element.dependency || mappedElement.dependency) {
+        node.content.dependency = resolveDependency(
+          mappedElement,
+          element.dependency,
+          options.localDependenciesPrefix
+        )
+      }
+    }
+  })
+}
+
+export const resolveConditional = (condNode: UIDLConditionalNode, options: GeneratorOptions) => {
+  if (condNode.content?.node) {
+    const { type, content } = condNode.content.node
+    if (type === 'element') {
+      resolveElement(content, options)
+    }
+  }
+}
+
+export const resolveElement = (element: UIDLElement, options: GeneratorOptions) => {
+  const { mapping, localDependenciesPrefix } = options
+  const {
+    events: eventsMapping,
+    elements: elementsMapping,
+    attributes: attributesMapping,
+  } = mapping
+  const isNextMappings =
+    mapping.elements.navlink?.dependency &&
+    mapping.elements.navlink.dependency?.path === 'next/link'
+  const originalElement = element
+  const originalElementType = originalElement.elementType
+  const mappedElement = elementsMapping[originalElement.elementType] || {
+    elementType: originalElement.semanticType ?? originalElement.elementType, // identity mapping
+  }
+
+  // Setting up the name of the node based on the type, if it is not supplied
+  originalElement.name = originalElement.name || originalElement.elementType
+
+  // Mapping the type from the semantic type of the mapping
+  // Semantic type has precedence as it is dictated by the user
+  originalElement.elementType = originalElement.semanticType || mappedElement.elementType
+
+  // Preserve the original element type so downstream generators can detect special nodes
+  // (e.g., markdown-node mapped to div still needs ReactMarkdown rendering)
+  if (originalElementType !== originalElement.elementType && !originalElement.semanticType) {
+    originalElement.semanticType = originalElementType
+  }
+
+  if (mappedElement.style) {
+    originalElement.style = deepmerge(mappedElement.style, originalElement.style || {})
+  }
+
+  if (mappedElement.selfClosing) {
+    originalElement.selfClosing = mappedElement.selfClosing
+  }
+
+  // Resolve dependency with the UIDL having priority
+  if (originalElement.dependency || mappedElement.dependency) {
+    originalElement.dependency = resolveDependency(
+      mappedElement,
+      originalElement.dependency,
+      localDependenciesPrefix
+    )
+  }
+
+  // Resolve assets prefix inside style (ex: background-image)
+  if (originalElement.style && options?.assets) {
+    originalElement.style = prefixAssetURLs(originalElement.style, options.assets)
+  }
+
+  // Map events separately
+  if (originalElement.events && eventsMapping) {
+    originalElement.events = resolveEvents(originalElement.events, eventsMapping)
+  }
+
+  // Prefix the attributes which may point to local assets
+  if (originalElement.attrs && options?.assets) {
+    Object.keys(originalElement.attrs).forEach((attrKey) => {
+      const attrValue = originalElement.attrs[attrKey]
+      if (attrValue.type === 'static' && typeof attrValue.content === 'string') {
+        originalElement.attrs[attrKey].content = UIDLUtils.prefixAssetsPath(
+          attrValue.content,
+          options.assets
+        )
+      }
+    })
+  }
+
+  // Merge UIDL attributes to the attributes coming from the mapping object
+  if (mappedElement.attrs) {
+    originalElement.attrs = resolveAttributes(mappedElement.attrs, originalElement.attrs)
+  }
+
+  if (originalElement.attrs && attributesMapping) {
+    const attrsKeys = Object.keys(originalElement.attrs)
+
+    attrsKeys
+      .filter((key) => attributesMapping[key])
+      .forEach((key) => {
+        originalElement.attrs[attributesMapping[key]] = originalElement.attrs[key]
+        delete originalElement.attrs[key]
+      })
+  }
+
+  if (mappedElement.children) {
+    originalElement.children = resolveChildren(mappedElement.children, originalElement.children)
+
+    // Solves an edge case for next.js by passing the styles from the <Link> tag to the <a> tag
+    const anchorChild = originalElement.children.find(
+      (child) => child.type === 'element' && child.content.elementType === 'a'
+    ) as UIDLElementNode
+
+    // only do it if there's a child <a> tag and the original element is a navlink or prop-link
+    const shouldPassStylesToAnchor =
+      (originalElement?.style || originalElement?.referencedStyles) &&
+      (originalElementType === 'navlink' || originalElementType === 'prop-link') &&
+      anchorChild
+    if (shouldPassStylesToAnchor) {
+      anchorChild.content.style = UIDLUtils.cloneObject(originalElement?.style || {})
+      anchorChild.content.referencedStyles = UIDLUtils.cloneObject(
+        originalElement?.referencedStyles || {}
+      )
+      originalElement.style = {}
+      originalElement.referencedStyles = {}
+    }
+  }
+
+  // Unlike all other frameworks, nextjs doesn't pass attributes on the custom link component.
+  // For eg: If we have additational props on top of Link in react-router-dom. They are passed to the child.
+  // So, we need to manually find the attributes that are not supported by next and pass to the actual anchor tag.
+  // https://github.com/vercel/next.js/blob/v12.3.4/packages/next/client/link.tsx#L29-L54
+  //
+  // Note: we generate against next/link@^12 with legacy behavior (<Link><a>...</a></Link>).
+  // In that mode Next.js requires onClick/onMouseEnter/onTouchStart on the inner <a>, not on
+  // <Link> — otherwise it logs: `"onClick" was passed to <Link> … but "legacyBehavior" was set`.
+  // So these handlers are intentionally *not* in the Link-allowed list below and get pushed down.
+  if (isNextMappings && originalElement.elementType === 'Link' && originalElement.attrs) {
+    const unSupportedattributesForNextLink = Object.fromEntries(
+      Object.entries(originalElement.attrs).filter(
+        ([key]) =>
+          [
+            'href',
+            'as',
+            'replace',
+            'scroll',
+            'shallow',
+            'passHref',
+            'prefetch',
+            'locale',
+            'legacyBehavior',
+          ].includes(key) === false
+      )
+    )
+    if (unSupportedattributesForNextLink && originalElement.children[0].type === 'element') {
+      originalElement.children[0].content.attrs = {
+        ...originalElement.children[0].content.attrs,
+        ...unSupportedattributesForNextLink,
+      }
+      Object.keys(unSupportedattributesForNextLink).forEach(
+        (key) => delete originalElement.attrs[key]
+      )
+    }
+
+    // Move event handlers from <Link> down to the inner <a>. Legacy next/link
+    // behavior (default in next@12) requires click/mouse/touch handlers on the
+    // child anchor, not on the Link itself.
+    if (originalElement.events && originalElement.children[0].type === 'element') {
+      const innerAnchor = originalElement.children[0]
+      innerAnchor.content.events = {
+        ...innerAnchor.content.events,
+        ...originalElement.events,
+      }
+      originalElement.events = {}
+    }
+  }
+}
+
+export const resolveChildren = (mappedChildren: UIDLNode[], originalChildren: UIDLNode[] = []) => {
+  let newChildren = UIDLUtils.cloneObject(mappedChildren)
+
+  let placeholderFound = false
+  newChildren.forEach((childNode) => {
+    UIDLUtils.traverseNodes(childNode, (node, parentNode) => {
+      if (node.type !== 'comp-style' && !isPlaceholderNode(node)) {
+        return // we're only interested in placeholder nodes
+      }
+
+      if (parentNode !== null) {
+        if (parentNode.type === 'element') {
+          // children nodes can only be added to type 'element'
+          // filter out the placeholder node and add the original children instead
+          parentNode.content.children = replacePlaceholderNode(
+            parentNode.content.children,
+            originalChildren
+          )
+          placeholderFound = true
+        }
+      } else {
+        // when parent is null, we work on the root children array for the given element
+        newChildren = replacePlaceholderNode(newChildren, originalChildren)
+        placeholderFound = true
+      }
+    })
+  })
+
+  // If a placeholder was found, it was removed and replaced with the original children somewhere inside the newChildren array
+  if (placeholderFound) {
+    return newChildren
+  }
+
+  // If no placeholder was found, newChildren are appended to the original children
+  return [...originalChildren, ...newChildren]
+}
+
+const isPlaceholderNode = (node: UIDLNode) =>
+  node.type === 'dynamic' && node.content.referenceType === 'children'
+
+// Replaces a single occurrence of the placeholder node (referenceType = 'children') with the original children of the element
+const replacePlaceholderNode = (nodes: UIDLNode[], insertedNodes: UIDLNode[]) => {
+  for (let index = 0; index < nodes.length; index++) {
+    if (isPlaceholderNode(nodes[index])) {
+      const retValue = [
+        ...nodes.slice(0, index),
+        ...insertedNodes,
+        ...nodes.slice(index + 1, nodes.length),
+      ]
+
+      return retValue
+    }
+  }
+
+  return nodes
+}
+
+const resolveRepeat = (repeatContent: UIDLRepeatContent, parentNode: UIDLNode) => {
+  const { dataSource } = repeatContent
+  if (dataSource.type === 'dynamic' && dataSource.content.referenceType === 'attr') {
+    const nodeDataSourceAttr = dataSource.content.id
+    const parentElement = parentNode.type === 'element' ? parentNode.content : null
+
+    if (parentElement && parentElement.attrs) {
+      const dataSourceValue = parentElement.attrs[nodeDataSourceAttr]
+      if (dataSourceValue.type === 'element') {
+        throw new Error(`Dynamic data source for repeat cannot be an element`)
+      }
+      if (dataSourceValue.type === 'object') {
+        throw new Error(`Data source for repeat cannot be an object`)
+      }
+      repeatContent.dataSource = dataSourceValue
+      // remove original attribute so it is not added as a static/dynamic value on the node
+      delete parentElement.attrs[nodeDataSourceAttr]
+    }
+  }
+}
+
+// Generates an unique key for each node in the UIDL.
+// By default it uses the component `name` and in case there are multiple nodes with the same name
+// it uses an incremental key which is padded with 0, so it can generate things like:
+// container, container1, container2, etc. OR
+// container, container01, container02, ... container10, container11,... in case the number is higher
+export const generateUniqueKeys = (uidl: ComponentUIDL, lookup: ElementsLookup) => {
+  const { node, propDefinitions = {} } = uidl
+
+  UIDLUtils.traverseNodes(node, (child) => {
+    if (
+      child.type !== 'cms-item' &&
+      child.type !== 'cms-list' &&
+      child.type !== 'cms-list-repeater' &&
+      child.type !== 'element'
+    ) {
+      return
+    }
+
+    generateKeysForElement(uidl.name, child.content, lookup)
+  })
+
+  for (const prop of Object.values(propDefinitions)) {
+    if (prop.type === 'element' && prop.defaultValue) {
+      UIDLUtils.traverseElements(prop.defaultValue as UIDLElementNode, (element) =>
+        generateKeysForElement(uidl.name, element, lookup)
+      )
+    }
+  }
+}
+
+export const createNodesLookup = (uidl: ComponentUIDL, lookup: ElementsLookup) => {
+  const { node, propDefinitions = {} } = uidl
+
+  UIDLUtils.traverseNodes(node, (child) => {
+    if (
+      child.type !== 'cms-item' &&
+      child.type !== 'cms-list' &&
+      child.type !== 'cms-list-repeater' &&
+      child.type !== 'element'
+    ) {
+      return
+    }
+
+    createNodesLookupForElement(uidl.name, child.content, lookup)
+  })
+
+  for (const prop of Object.values(propDefinitions)) {
+    if (prop.type === 'element' && prop.defaultValue) {
+      UIDLUtils.traverseElements(prop.defaultValue as UIDLElementNode, (element) =>
+        createNodesLookupForElement(uidl.name, element, lookup)
+      )
+    }
+  }
+}
+
+const createNodesLookupForElement = (
+  compName: string,
+  element: UIDLElement,
+  lookup: ElementsLookup
+) => {
+  const elementName = createLookupKey(compName, element.name)
+  if (!lookup[elementName]) {
+    lookup[elementName] = {
+      count: 1,
+      nextKey: '1',
+    }
+    return
+  }
+
+  lookup[elementName].count++
+  const newCount = lookup[elementName].count
+  if (newCount > 9 && isPowerOfTen(newCount)) {
+    // Add a '0' each time we pass a power of ten: 10, 100, 1000, etc.
+    // nextKey will start either from: '0', '00', '000', etc.
+    lookup[elementName].nextKey = lookup[elementName].nextKey + '0'
+  }
+}
+
+const generateKeysForElement = (compName: string, element: UIDLElement, lookup: ElementsLookup) => {
+  const name = createLookupKey(compName, element.name)
+  const nodeOccurrence = lookup[name]
+
+  if (nodeOccurrence.count === 1) {
+    element.key = name
+  } else {
+    let currentKey = nodeOccurrence.nextKey
+    let newKey = generateKey(name, currentKey)
+
+    // This is a special case where the next-key is already used by another.
+    // Eg: Let's say we have a container with name `link1` and the component name is footer.
+    // So when we are joining both the name is `footer1-link1` in the lookup.
+    // Now, we have few other container with the name `Link` multiple times. Now the possible lookups become
+    // footer1-link footer1-link1 footer1-link2 footer1-link3 and so on.
+    // If you notice now two nodes ended by becoming same `footer1-link1` and `footer1-link1`. But not set by user.
+    // So, we make sure even after appending the occurance we are not coliding with any other key.
+    while (lookup[newKey] || newKey === name) {
+      currentKey = generateNextIncrementalKey(currentKey)
+      newKey = generateKey(name, currentKey)
+    }
+
+    element.key = newKey
+    lookup[newKey] = { count: 1, nextKey: generateNextIncrementalKey(currentKey) }
+    nodeOccurrence.nextKey = generateNextIncrementalKey(currentKey)
+  }
+}
+
+const generateNextIncrementalKey = (currentKey: string): string => {
+  const nextNumericValue = parseInt(currentKey, 10) + 1
+  let returnValue = nextNumericValue.toString()
+
+  // Pad with zeros if necessary to match the original length
+  while (returnValue.length < currentKey.length) {
+    returnValue = '0' + returnValue
+  }
+
+  return returnValue
+}
+
+const generateKey = (name: string, key: string): string => {
+  const firstOcurrence = parseInt(key, 10) === 0
+  return firstOcurrence ? name : name + key
+}
+
+const isPowerOfTen = (value: number) => {
+  while (value > 9 && value % 10 === 0) {
+    value /= 10
+  }
+
+  return value === 1
+}
+
+export const ensureDataSourceUniqueness = (node: UIDLNode) => {
+  let index = 0
+
+  UIDLUtils.traverseRepeats(node, (repeat: UIDLRepeatContent) => {
+    if (!repeat.dataSource?.type) {
+      return
+    }
+
+    if (repeat.dataSource.type === 'static' && !customDataSourceIdentifierExists(repeat)) {
+      repeat.meta = repeat.meta || {}
+      repeat.meta.dataSourceIdentifier = index === 0 ? 'items' : `items${index}`
+      index += 1
+    }
+  })
+}
+
+const customDataSourceIdentifierExists = (repeat: UIDLRepeatContent) => {
+  return !!(repeat.meta && repeat.meta.dataSourceIdentifier)
+}
+
+export function parseStaticStyles(styles: string) {
+  const stylesList: string[] = []
+  const tokens = /[,\(\)]/
+  let parens = 0
+  let buffer = ''
+
+  if (styles == null) {
+    return stylesList
+  }
+
+  while (styles.length) {
+    const match = tokens.exec(styles)
+    if (!match) {
+      break
+    }
+    const char = match[0]
+    let ignoreChar = false
+    let foundAssetId = false
+
+    switch (char) {
+      case ',':
+        if (!parens) {
+          if (buffer) {
+            stylesList.push(buffer.trim())
+            buffer = ''
+          } else {
+            foundAssetId = true
+          }
+
+          ignoreChar = true
+        }
+        break
+      case '(':
+        parens++
+        break
+      case ')':
+        parens--
+        break
+      default:
+        break
+    }
+
+    const index = match.index + 1
+    buffer += styles.slice(0, ignoreChar ? index - 1 : index)
+    styles = styles.slice(index)
+
+    if (foundAssetId) {
+      stylesList.push(buffer.trim())
+      buffer = ''
+      ignoreChar = true
+    }
+  }
+
+  if (buffer.length || styles.length) {
+    stylesList.push((buffer + styles).trim())
+  }
+
+  return stylesList
+}
+
+/**
+ * Prefixes all urls inside the style object with the assetsPrefix
+ * @param style the style object on the current node
+ * @param assets comes from project generator options which contains the prefix, mappings and identifier
+ */
+
+export const prefixAssetURLs = <
+  T extends UIDLStaticValue | UIDLDynamicReference | UIDLStyleSetTokenReference
+>(
+  style: Record<string, T>,
+  assets: GeneratorOptions['assets']
+): Record<string, T> => {
+  // iterate through all the style keys
+  return Object.keys(style).reduce((acc: Record<string, T>, styleKey: string) => {
+    const styleValue = style[styleKey]
+
+    switch (styleValue.type) {
+      case 'dynamic':
+        acc[styleKey] = styleValue
+        return acc
+      case 'static':
+        const staticContent = styleValue.content
+        if (typeof staticContent === 'number') {
+          acc[styleKey] = styleValue
+          return acc
+        }
+
+        if (typeof staticContent === 'string' && STYLE_PROPERTIES_WITH_URL.includes(styleKey)) {
+          // need to split the styles in case of multiple background being added (eg: gradient + bgImage)
+          let styleList = parseStaticStyles(staticContent)
+          styleList = styleList.map((subStyle) => {
+            let asset = subStyle
+            const match = subStyle.match(/url\(['"]?(.*?")['"]?\)/)
+            if (match) {
+              asset = match[1].replace(/('|")/g, '')
+            }
+
+            /*
+              background image such as gradient shouldn't be urls
+              we prevent that by checking if the value is actually an asset or not (same check as in the prefixAssetsPath function
+              but we don't compute and generate a url)
+            */
+            if (!asset.startsWith('/')) {
+              return subStyle
+            }
+
+            const url = UIDLUtils.prefixAssetsPath(asset, assets)
+            const newStyleValue = `url("${url}")`
+            return newStyleValue
+          })
+
+          acc[styleKey] = {
+            type: 'static',
+            content: styleList.join(','),
+          } as T
+        } else {
+          acc[styleKey] = styleValue
+        }
+        return acc
+      default:
+        throw new Error(`Invalid styleValue type '${styleValue}'`)
+    }
+  }, {})
+}
+
+const resolveAttributes = (
+  mappedAttrs: Record<string, UIDLAttributeValue>,
+  uidlAttrs: Record<string, UIDLAttributeValue>
+) => {
+  // We gather the results here uniting the mapped attributes and the uidl attributes.
+  const resolvedAttrs: Record<string, UIDLAttributeValue> = {}
+  // This will gather all the attributes from the UIDL which are mapped using the elements-mapping
+  // These attributes will not be added on the tag as they are, but using the elements-mapping
+  // Such an example is the url attribute on the Link tag, which needs to be mapped in the case of html to href
+  const mappedAttributes: string[] = []
+  // First we iterate through the mapping attributes and we add them to the result
+  Object.keys(mappedAttrs).forEach((key) => {
+    const attrValue = mappedAttrs[key]
+    if (!attrValue) {
+      return
+    }
+
+    if (attrValue.type === 'dynamic' && attrValue.content.referenceType === 'attr') {
+      // we lookup for the attributes in the UIDL and use the element-mapping key to set them on the tag
+      // ex: Link has an 'url' attribute in the UIDL, but it needs to be mapped to 'href' in the case of HTML
+      const uidlAttributeKey = attrValue.content.id
+      if (uidlAttrs && uidlAttrs[uidlAttributeKey]) {
+        resolvedAttrs[key] = uidlAttrs[uidlAttributeKey]
+        mappedAttributes.push(uidlAttributeKey)
+      }
+
+      return
+    }
+
+    resolvedAttrs[key] = mappedAttrs[key]
+  })
+
+  // The UIDL attributes can override the mapped attributes, so they come last
+  if (uidlAttrs) {
+    Object.keys(uidlAttrs).forEach((key) => {
+      // Skip the attributes that were mapped as referenceType = 'attr'
+      if (!mappedAttributes.includes(key)) {
+        resolvedAttrs[key] = uidlAttrs[key]
+      }
+    })
+  }
+
+  return resolvedAttrs
+}
+
+const resolveDependency = (
+  mappedElement: UIDLElement,
+  uidlDependency?: UIDLDependency,
+  localDependenciesPrefix = './'
+) => {
+  // If dependency is specified at UIDL level it will have priority over the mapping one
+  const nodeDependency = uidlDependency || mappedElement.dependency
+  if (nodeDependency && nodeDependency.type === 'local') {
+    // When a dependency is specified without a path, we infer it is a local import.
+
+    // ex: PrimaryButton component should be written in a file called primary-button
+    // This is just a fallback for when the dependency path is not set by a project generator
+    const componentName = mappedElement.elementType
+    const componentFileName = StringUtils.camelCaseToDashCase(componentName)
+
+    // concatenate a trailing slash in case it's missing
+    if (localDependenciesPrefix[localDependenciesPrefix.length - 1] !== '/') {
+      localDependenciesPrefix = localDependenciesPrefix + '/'
+    }
+
+    nodeDependency.path = nodeDependency.path || localDependenciesPrefix + componentFileName
+  }
+
+  return nodeDependency
+}
+
+const resolveEvents = (events: UIDLEventDefinitions, eventsMapping: Record<string, string>) => {
+  const resultedEvents: UIDLEventDefinitions = {}
+  Object.keys(events).forEach((eventKey) => {
+    const resolvedKey = eventsMapping[eventKey] || eventKey
+    resultedEvents[resolvedKey] = events[eventKey]
+  })
+
+  return resultedEvents
+}
+
+export const checkForIllegalNames = (uidl: ComponentUIDL, mapping: Mapping) => {
+  const { illegalClassNames, illegalPropNames } = mapping
+  if (illegalClassNames.includes(uidl.outputOptions.componentClassName)) {
+    console.warn(
+      `Illegal component name '${uidl.outputOptions.componentClassName}'. Appending 'App' in front of it`
+    )
+    uidl.outputOptions.componentClassName = `App${uidl.outputOptions.componentClassName}`
+  }
+
+  Object.keys(uidl.propDefinitions || {}).forEach((prop) => {
+    if (illegalPropNames.includes(prop)) {
+      throw new Error(`Illegal prop key '${prop}'`)
+    }
+  })
+
+  Object.keys(uidl.stateDefinitions || {}).forEach((state) => {
+    if (illegalPropNames.includes(state)) {
+      throw new Error(`Illegal state key '${state}'`)
+    }
+  })
+}
+
+export const checkForDefaultPropsContainingAssets = (
+  uidl: ComponentUIDL,
+  options: GeneratorOptions
+) => {
+  if (options.assets === undefined) {
+    return
+  }
+
+  for (const propKey of Object.keys(uidl.propDefinitions || {})) {
+    const prop = uidl.propDefinitions[propKey]
+    if (prop.defaultValue && prop.type === 'string' && typeof prop.defaultValue === 'string') {
+      uidl.propDefinitions[propKey].defaultValue = UIDLUtils.prefixAssetsPath(
+        prop.defaultValue,
+        options.assets
+      )
+    }
+  }
+}
+
+export const checkForDefaultStateValueContainingAssets = (
+  uidl: ComponentUIDL,
+  options: GeneratorOptions
+) => {
+  if (uidl.stateDefinitions) {
+    Object.keys(uidl.stateDefinitions).forEach((state) => {
+      const stateDef = uidl.stateDefinitions[state]
+      const stateDefaultValue = stateDef.defaultValue
+      if (typeof stateDefaultValue === 'string' && options.assets) {
+        uidl.stateDefinitions[state].defaultValue = UIDLUtils.prefixAssetsPath(
+          stateDefaultValue,
+          options.assets
+        )
+      } else if (
+        stateDef.type === 'object' &&
+        typeof stateDefaultValue === 'object' &&
+        stateDefaultValue !== null &&
+        !Array.isArray(stateDefaultValue) &&
+        options.assets
+      ) {
+        const objectValue = stateDefaultValue as Record<
+          string,
+          { type?: string; content?: unknown }
+        >
+        Object.keys(objectValue).forEach((key) => {
+          const entry = objectValue[key]
+          if (entry?.type === 'static' && typeof entry.content === 'string') {
+            entry.content = UIDLUtils.prefixAssetsPath(entry.content, options.assets)
+          }
+        })
+      }
+    })
+  }
+}
+
+export const resolveNodeInPropDefinitions = (uidl: ComponentUIDL, options: GeneratorOptions) => {
+  if (!uidl.propDefinitions) {
+    return
+  }
+
+  for (const propKey of Object.keys(uidl.propDefinitions)) {
+    const prop = uidl.propDefinitions[propKey]
+    if (prop.type === 'element' && typeof prop.defaultValue === 'object') {
+      resolveNode(prop.defaultValue as UIDLElementNode, options)
+    }
+  }
+}

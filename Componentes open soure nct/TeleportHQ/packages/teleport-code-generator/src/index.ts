@@ -1,0 +1,285 @@
+import {
+  PackProjectFunction,
+  GenerateComponentFunction,
+  ComponentUIDL,
+  PublisherType,
+  ProjectType,
+  ComponentType,
+  StyleVariation,
+  ReactStyleVariation,
+  InvalidProjectTypeError,
+  InvalidPublisherTypeError,
+  GeneratorOptions,
+  Mapping,
+  ComponentGenerator,
+  ComponentGeneratorInstance,
+  ProjectPlugin,
+  HTMLComponentGenerator,
+  ComponentPlugin,
+} from '@teleporthq/teleport-types'
+import { Constants } from '@teleporthq/teleport-shared'
+
+import { createProjectPacker } from '@teleporthq/teleport-project-packer'
+import {
+  ReactTemplate,
+  createReactProjectGenerator,
+  ReactProjectMapping,
+} from '@teleporthq/teleport-project-generator-react'
+import {
+  createNextProjectGenerator,
+  NextTemplate,
+  NextProjectPlugini18nConfig,
+  createNextProjectPlugins,
+} from '@teleporthq/teleport-project-generator-next'
+import {
+  VueTemplate,
+  createVueProjectGenerator,
+  VueProjectMapping,
+} from '@teleporthq/teleport-project-generator-vue'
+import {
+  NuxtTemplate,
+  createNuxtProjectGenerator,
+  nuxtErrorPageMapper,
+} from '@teleporthq/teleport-project-generator-nuxt'
+
+import {
+  createAngularProjectGenerator,
+  AngularTemplate,
+  AngularProjectMapping,
+} from '@teleporthq/teleport-project-generator-angular'
+
+import {
+  createHTMLProjectGenerator,
+  HTMLTemplate,
+  pluginHomeReplace,
+  htmlErrorPageMapping,
+  ProjectPluginCloneGlobals,
+} from '@teleporthq/teleport-project-generator-html'
+
+import { createZipPublisher } from '@teleporthq/teleport-publisher-zip'
+import { createVercelPublisher } from '@teleporthq/teleport-publisher-vercel'
+import { createNetlifyPublisher } from '@teleporthq/teleport-publisher-netlify'
+import { createGithubPublisher } from '@teleporthq/teleport-publisher-github'
+import { createCodesandboxPublisher } from '@teleporthq/teleport-publisher-codesandbox'
+
+import { createReactComponentGenerator } from '@teleporthq/teleport-component-generator-react'
+import { createVueComponentGenerator } from '@teleporthq/teleport-component-generator-vue'
+import { createAngularComponentGenerator } from '@teleporthq/teleport-component-generator-angular'
+import {
+  createHTMLComponentGenerator,
+  PlainHTMLMapping,
+} from '@teleporthq/teleport-component-generator-html'
+import { ProjectPlugini18nFiles } from '@teleporthq/teleport-project-plugin-i18n-files'
+import { isNodeProcess } from './utils'
+
+const componentGeneratorFactories: Record<ComponentType, ComponentGeneratorInstance> = {
+  [ComponentType.REACT]: createReactComponentGenerator,
+  [ComponentType.ANGULAR]: createAngularComponentGenerator,
+  [ComponentType.VUE]: createVueComponentGenerator,
+  [ComponentType.HTML]: createHTMLComponentGenerator,
+}
+
+const componentGeneratorProjectMappings = {
+  [ComponentType.REACT]: ReactProjectMapping,
+  [ComponentType.ANGULAR]: AngularProjectMapping,
+  [ComponentType.VUE]: VueProjectMapping,
+  [ComponentType.HTML]: PlainHTMLMapping,
+}
+
+const projectGeneratorFactories = {
+  [ProjectType.REACT]: createReactProjectGenerator,
+  [ProjectType.NEXT]: createNextProjectGenerator,
+  [ProjectType.VUE]: createVueProjectGenerator,
+  [ProjectType.NUXT]: createNuxtProjectGenerator,
+  [ProjectType.ANGULAR]: createAngularProjectGenerator,
+  [ProjectType.HTML]: createHTMLProjectGenerator,
+}
+
+const templates = {
+  [ProjectType.REACT]: ReactTemplate,
+  [ProjectType.NEXT]: NextTemplate,
+  [ProjectType.VUE]: VueTemplate,
+  [ProjectType.NUXT]: NuxtTemplate,
+  [ProjectType.ANGULAR]: AngularTemplate,
+  [ProjectType.HTML]: HTMLTemplate,
+}
+
+/* tslint:disable ban-types */
+const projectPublisherFactories: Omit<Record<PublisherType, Function>, PublisherType.DISK> = {
+  [PublisherType.ZIP]: createZipPublisher,
+  [PublisherType.VERCEL]: createVercelPublisher,
+  [PublisherType.NETLIFY]: createNetlifyPublisher,
+  [PublisherType.GITHUB]: createGithubPublisher,
+  [PublisherType.CODESANDBOX]: createCodesandboxPublisher,
+}
+
+export const packProject: PackProjectFunction = async (
+  projectUIDL,
+  {
+    projectType,
+    publisher: publisherType,
+    publishOptions = {},
+    assets = [],
+    plugins = [],
+    assetsFolder = [Constants.ASSETS_IDENTIFIER],
+    excludeGlobalsFromHTMLComponents,
+    strictHtmlWhitespaceSensitivity = true,
+    standaloneHtmlComponents = false,
+    excludeHtmlComponentFiles = false,
+    generateSitemap = true,
+    targetLocale,
+  }
+) => {
+  // When standaloneHtmlComponents is true, components should be self-contained fragments
+  // without DOCTYPE/html/head wrapper. Automatically enable excludeGlobalsFromHTMLComponents
+  // unless explicitly set to false by the user.
+  const shouldExcludeGlobals =
+    excludeGlobalsFromHTMLComponents ?? (standaloneHtmlComponents ? true : false)
+  // When standaloneHtmlComponents is true, pages inline all sub-components, so separate
+  // component files are redundant. Automatically enable excludeHtmlComponentFiles unless
+  // explicitly set by the user.
+  const shouldexcludeHtmlComponentFiles =
+    excludeHtmlComponentFiles ?? (standaloneHtmlComponents ? true : false)
+  const packer = createProjectPacker()
+  let publisher
+  if (publisherType === PublisherType.DISK) {
+    if (isNodeProcess()) {
+      const createDiskPublisher = await import('@teleporthq/teleport-publisher-disk').then(
+        (mod) => mod.createDiskPublisher
+      )
+      publisher = createDiskPublisher
+    } else {
+      throw Error(`${PublisherType.DISK} can only be used inside node environments`)
+    }
+  } else {
+    publisher = projectPublisherFactories[publisherType]
+  }
+
+  const projectGeneratorFactory =
+    projectType === ProjectType.HTML
+      ? projectGeneratorFactories[projectType]({
+          standaloneHtmlComponents,
+          excludeHtmlComponentFiles: shouldexcludeHtmlComponentFiles,
+        })
+      : projectGeneratorFactories[projectType]()
+  projectGeneratorFactory.cleanPlugins()
+
+  projectGeneratorFactory.addPlugin(new ProjectPlugini18nFiles({ projectType }))
+
+  if (projectType === ProjectType.HTML) {
+    projectGeneratorFactory.addPlugin(pluginHomeReplace)
+    projectGeneratorFactory.addPlugin(
+      new ProjectPluginCloneGlobals({
+        excludeGlobalsFromComponents: shouldExcludeGlobals,
+        strictHtmlWhitespaceSensitivity,
+      })
+    )
+    projectGeneratorFactory.addPlugin(htmlErrorPageMapping)
+  }
+
+  if (projectType === ProjectType.NEXT) {
+    // packProject calls cleanPlugins() above and rebuilds the NEXT project-plugin
+    // list from scratch, so this packProject-only plugin (which needs the
+    // runtime `generateSitemap` option) is added explicitly here.
+    // NOTE: the forms-captcha provider script is no longer injected globally
+    // here — it's loaded per-page by the form ComponentPlugin
+    // (createNextFormSubmissionPlugin), so it only loads on pages with forms.
+    projectGeneratorFactory.addPlugin(new NextProjectPlugini18nConfig({ generateSitemap }))
+    // Everything else — data-source, workflow/auth, ecommerce, analytics, the
+    // interactive-library primitives (calendar / drag-and-drop / kanban /
+    // countdown) and the npm-backed widget primitives (incl. motion) — comes
+    // from the SINGLE shared list so this can never drift from
+    // createNextProjectGenerator. Previously this block duplicated that list by
+    // hand; a plugin missing here (or lost to a stale build) silently dropped
+    // its wrapper file's npm dependency, breaking `next build` with e.g.
+    // "Module not found: Can't resolve 'framer-motion'".
+    createNextProjectPlugins().forEach((plugin) => projectGeneratorFactory.addPlugin(plugin))
+  }
+
+  if (projectType === ProjectType.NUXT) {
+    projectGeneratorFactory.addPlugin(nuxtErrorPageMapper)
+  }
+
+  if (plugins?.length > 0) {
+    plugins.forEach((plugin: ProjectPlugin) => {
+      projectGeneratorFactory.addPlugin(plugin)
+    })
+  }
+
+  const projectTemplate = templates[projectType]
+
+  if (!projectGeneratorFactory) {
+    throw new InvalidProjectTypeError(projectType)
+  }
+
+  if (publisherType && !publisher) {
+    throw new InvalidPublisherTypeError(publisherType)
+  }
+
+  packer.setAssets({
+    assets,
+    path: assetsFolder,
+  })
+
+  packer.setGenerator(projectGeneratorFactory)
+  packer.setTemplate(projectTemplate)
+
+  // If no publisher is provided, the packer will return the generated project
+  if (publisherType) {
+    const publisherFactory = publisher
+    const projectPublisher = publisherFactory(publishOptions)
+    // @ts-ignore
+    packer.setPublisher(projectPublisher)
+  }
+
+  return packer.pack(projectUIDL, { strictHtmlWhitespaceSensitivity, targetLocale })
+}
+
+export const generateComponent: GenerateComponentFunction = async (
+  componentUIDL: ComponentUIDL,
+  {
+    componentType = ComponentType.REACT,
+    styleVariation = ReactStyleVariation.CSSModules,
+    componentGeneratorOptions = {
+      extractedResources: {},
+    },
+    plugins = [],
+  }: {
+    componentType?: ComponentType
+    styleVariation?: ReactStyleVariation
+    componentGeneratorOptions?: GeneratorOptions
+    plugins?: ComponentPlugin[]
+  } = {}
+) => {
+  const generator = createComponentGenerator(componentType, styleVariation, plugins)
+  const projectMapping = componentGeneratorProjectMappings[componentType]
+  generator.addMapping(projectMapping as Mapping)
+
+  if (componentType === ComponentType.HTML) {
+    const { moduleComponents } = componentGeneratorOptions
+    ;(generator as HTMLComponentGenerator).addExternalComponents({
+      externals: moduleComponents,
+      options: {},
+    })
+  }
+
+  return generator.generateComponent(componentUIDL, componentGeneratorOptions)
+}
+
+const createComponentGenerator = (
+  componentType: ComponentType,
+  styleVariation: StyleVariation,
+  plugins: ComponentPlugin[]
+): ComponentGenerator => {
+  const generatorFactory = componentGeneratorFactories[componentType]
+
+  if (!generatorFactory) {
+    throw new Error(`Invalid ComponentType: ${componentType}`)
+  }
+
+  if (componentType === ComponentType.REACT) {
+    return generatorFactory({ variation: styleVariation, plugins })
+  }
+
+  return generatorFactory({ plugins })
+}

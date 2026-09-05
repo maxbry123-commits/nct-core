@@ -1,0 +1,10 @@
+{
+  "name": "BigSample",
+  "node": {
+    "type": "element",
+    "content": {
+      "elementType": "container",
+      "children": []
+    }
+  }
+}

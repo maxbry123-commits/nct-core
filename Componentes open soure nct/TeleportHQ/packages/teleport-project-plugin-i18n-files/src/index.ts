@@ -1,0 +1,176 @@
+import {
+  ChunkType,
+  ComponentStructure,
+  ComponentUIDL,
+  FileType,
+  ProjectPlugin,
+  ProjectPluginStructure,
+  ProjectType,
+  UIDLElementNode,
+  UIDLStyleSetDefinition,
+} from '@teleporthq/teleport-types'
+import {
+  createJSXSyntax,
+  ASTBuilders,
+  JSXGenerationParams,
+} from '@teleporthq/teleport-plugin-common'
+import { CodeGenerator } from '@babel/generator'
+import * as types from '@babel/types'
+import { Resolver } from '@teleporthq/teleport-uidl-resolver'
+import { ReactMapping } from '@teleporthq/teleport-component-generator-react'
+import { createCSSPlugin } from '@teleporthq/teleport-plugin-css'
+import { StringUtils } from '@teleporthq/teleport-shared'
+
+export class ProjectPlugini18nFiles implements ProjectPlugin {
+  projectType: ProjectType
+  resolver: Resolver
+
+  constructor(params: { projectType: ProjectType }) {
+    this.projectType = params.projectType
+    this.resolver = new Resolver(ReactMapping)
+  }
+
+  async generateJSX(
+    node: UIDLElementNode,
+    projectStyleSet: Record<string, UIDLStyleSetDefinition>,
+    id: string
+  ): Promise<{ html: string; css?: string }> {
+    const proxyUIDL: ComponentUIDL = {
+      name: id,
+      node,
+    }
+    const resolvedUIDL = this.resolver.resolveUIDL(proxyUIDL)
+
+    const jsxParams: JSXGenerationParams = {
+      stateDefinitions: {},
+      propDefinitions: {},
+      globalStateDefinitions: {},
+      windowImports: {},
+      dependencies: {},
+      nodesLookup: {},
+      localeReferences: [],
+      localeAttributeReferences: [],
+      globalReferences: [],
+      globalStateReferences: [],
+      hoistedConstants: [],
+    }
+
+    const jsxNodeAst = createJSXSyntax(resolvedUIDL.node, jsxParams, {
+      dynamicReferencePrefixMap: {
+        prop: 'props',
+        state: '',
+        local: '',
+      },
+      dependencyHandling: 'import',
+      stateHandling: 'hooks',
+      slotHandling: 'props',
+      domHTMLInjection: (content: string) => ASTBuilders.createDOMInjectionNode(content),
+    })
+
+    const initialStructure: ComponentStructure = {
+      uidl: resolvedUIDL,
+      chunks: [
+        {
+          type: ChunkType.AST,
+          name: 'jsx-component',
+          fileType: FileType.JS,
+          meta: {
+            nodesLookup: jsxParams.nodesLookup,
+            dynamicRefPrefix: {},
+          },
+          content: jsxNodeAst,
+          linkAfter: [],
+        },
+      ],
+      dependencies: {},
+      options: {
+        projectStyleSet: { styleSetDefinitions: projectStyleSet, fileName: '', path: '' },
+      },
+    }
+
+    const result = await createCSSPlugin({
+      templateChunkName: 'jsx-component',
+      templateStyle: 'jsx',
+    })(initialStructure)
+
+    const resultJSXChunk = result.chunks.find((chunk) => chunk.type === ChunkType.AST)
+    const resultCSSChunk = result.chunks.find(
+      (chunk) => chunk.type === ChunkType.STRING && chunk.fileType === FileType.CSS
+    )
+    const jsx = new CodeGenerator(resultJSXChunk.content as types.JSXElement, {
+      jsescOption: { minimal: true },
+    }).generate()
+
+    return {
+      html: jsx.code,
+      css: typeof resultCSSChunk?.content === 'string' ? resultCSSChunk?.content : undefined,
+    }
+  }
+
+  async runBefore(structure: ProjectPluginStructure) {
+    return structure
+  }
+
+  async runAfter(structure: ProjectPluginStructure) {
+    const { uidl, files } = structure
+
+    const { translations = { en: {} }, languages = {} } = uidl.internationalization || {}
+
+    // Union of both: `languages` is what `next.config.js` advertises as a
+    // routable locale, and EVERY page loads `locales/<locale>.json` from
+    // getStaticProps. A language with no translations yet would otherwise have
+    // no file at all and take the whole build down with a module-not-found.
+    const locales = Array.from(new Set([...Object.keys(translations), ...Object.keys(languages)]))
+
+    for (const locale of locales) {
+      const translation = translations[locale] || {}
+      // Declared per locale on purpose: a shared array would carry every earlier
+      // locale's entries into the next file (and re-render them), so each extra
+      // language cost one more full pass over all the previous ones.
+      const promises: Array<Promise<Record<string, string>>> = []
+      for (const id of Object.keys(translation)) {
+        const item = translation[id]
+
+        // Keys are sanitized here AND at every `translate.raw()` emission (see
+        // `StringUtils.sanitizeTranslationKey`) — a raw dotted key would make
+        // next-intl reject the whole messages file at runtime.
+        const messageKey = StringUtils.sanitizeTranslationKey(id)
+
+        if (item?.type === 'element') {
+          promises.push(
+            new Promise((resolve) => {
+              this.generateJSX(item, uidl.root.styleSetDefinitions, id).then(({ html, css }) => {
+                resolve({ [messageKey]: css ? `${html} \n <style>${css}</style>` : html })
+              })
+            })
+          )
+        }
+
+        if (item?.type === 'static') {
+          promises.push(new Promise((resolve) => resolve({ [messageKey]: String(item.content) })))
+        }
+      }
+
+      try {
+        const result = await Promise.all(promises)
+        const content = result.reduce((acc, item) => ({ ...acc, ...item }), {})
+
+        files.set(locale, {
+          path: ['locales'],
+          files: [
+            {
+              name: locale,
+              content: JSON.stringify(content, null, 2),
+              fileType: FileType.JSON,
+            },
+          ],
+        })
+      } catch (error) {
+        /* tslint:disable no-console */
+        console.error('Error generating i18n files', error)
+      }
+    }
+
+    return structure
+  }
+}

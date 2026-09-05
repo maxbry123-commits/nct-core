@@ -1,0 +1,57 @@
+{
+  "name": "teleport-test",
+  "private": true,
+  "version": "0.43.59",
+  "description": "A private repo used for testing the entire ecosystem locally",
+  "author": "teleportHQ",
+  "license": "MIT",
+  "homepage": "https://teleporthq.io/",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/teleporthq/teleport-code-generators.git"
+  },
+  "bugs": {
+    "url": "https://github.com/teleporthq/teleport-code-generators/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "packer": "cross-env TS_NODE_FILES=true ts-node --project tsconfig.json ./src/packer.ts",
+    "generate": "cross-env TS_NODE_FILES=true ts-node --transpile-only --project tsconfig.json ./src/generate.ts",
+    "standalone": "cross-env TS_NODE_FILES=true ts-node --transpile-only --project tsconfig.json ./src/standalone.ts",
+    "standalone:partial": "cross-env TS_NODE_FILES=true ts-node --transpile-only --project tsconfig.json ./src/standalone-partial.ts",
+    "cms": "cross-env TS_NODE_FILES=true ts-node --transpile-only --project tsconfig.json ./src/cms.ts",
+    "comp": "cross-env TS_NODE_FILES=true ts-node --project tsconfig.json ./src/component.ts",
+    "bundle": "webpack --config webpack.config.js"
+  },
+  "dependencies": {
+    "@teleporthq/teleport-code-generator": "^0.43.59",
+    "@teleporthq/teleport-component-generator-html": "^0.43.59",
+    "@teleporthq/teleport-project-generator-angular": "^0.43.59",
+    "@teleporthq/teleport-project-generator-next": "^0.43.59",
+    "@teleporthq/teleport-project-generator-nuxt": "^0.43.59",
+    "@teleporthq/teleport-project-generator-react": "^0.43.59",
+    "@teleporthq/teleport-project-generator-vue": "^0.43.59",
+    "@teleporthq/teleport-project-packer": "^0.43.59",
+    "@teleporthq/teleport-project-plugin-css-modules": "^0.43.59",
+    "@teleporthq/teleport-project-plugin-react-jss": "^0.43.59",
+    "@teleporthq/teleport-project-plugin-styled-components": "^0.43.59",
+    "@teleporthq/teleport-project-plugin-tailwind": "^0.43.59",
+    "@teleporthq/teleport-publisher-codesandbox": "^0.43.59",
+    "@teleporthq/teleport-publisher-disk": "^0.43.59",
+    "@teleporthq/teleport-types": "^0.43.59"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.2",
+    "html-webpack-plugin": "^5.3.2",
+    "node-polyfill-webpack-plugin": "^1.1.4",
+    "ts-node": "^8.6.2",
+    "webpack": "^5.42.0",
+    "webpack-bundle-analyzer": "^3.5.1",
+    "webpack-cli": "^4.7.2",
+    "webpack-dev-server": "^3.11.2"
+  }
+}

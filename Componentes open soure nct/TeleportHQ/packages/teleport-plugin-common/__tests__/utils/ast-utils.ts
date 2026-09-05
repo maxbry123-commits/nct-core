@@ -1,0 +1,421 @@
+import {
+  stringAsTemplateLiteral,
+  addSpreadAttributeToJSXTag,
+  renameJSXTag,
+  addClassStringOnJSXTag,
+  addAttributeToJSXTag,
+  addDynamicAttributeToJSXTag,
+  convertValueToLiteral,
+  objectToObjectExpression,
+  addRawAttributeToJSXTag,
+  collectGlobalReferencesFromObjectStates,
+  createStateHookAST,
+  sanitizeExprContent,
+} from '../../src/utils/ast-utils'
+import generator from '@babel/generator'
+import ParsedASTNode from '../../src/utils/parsed-ast'
+import { createJSXTag } from '../../src/builders/ast-builders'
+import * as types from '@babel/types'
+
+describe('stringAsTemplateLiteral', () => {
+  it('returns TemplateLiteral', () => {
+    const result = stringAsTemplateLiteral('randomString')
+
+    expect(result.type).toBe('TemplateLiteral')
+    expect(result.quasis[0].type).toBe('TemplateElement')
+  })
+})
+
+describe('addSpreadAttributeToJSXTag', () => {
+  it('runs with success', () => {
+    const tag = createJSXTag('random')
+    addSpreadAttributeToJSXTag(tag, 'randomString')
+
+    const attr = tag.openingElement.attributes[0]
+    expect(attr.type).toBe('JSXSpreadAttribute')
+    expect((attr as types.JSXSpreadAttribute).argument).toHaveProperty('name', 'randomString')
+  })
+})
+
+describe('renameJSXTag', () => {
+  it('runs with success', () => {
+    const tag = createJSXTag('random')
+    renameJSXTag(tag, 'NewName')
+
+    const openTag = tag.openingElement.name as types.JSXIdentifier
+    const closeTag = tag.closingElement.name as types.JSXIdentifier
+    expect(openTag.name).toBe('NewName')
+    expect(closeTag.name).toBe('NewName')
+  })
+})
+
+describe('addClassStringOnJSXTag', () => {
+  it('adds a class on an element with no classes', () => {
+    const tag = createJSXTag('button')
+
+    addClassStringOnJSXTag(tag, 'primary')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('className')
+    expect((classAttr.value as types.StringLiteral).value).toBe('primary')
+  })
+
+  it('adds a class on an element with existing classes', () => {
+    const tag = createJSXTag('button')
+    addAttributeToJSXTag(tag, 'className', 'button')
+
+    addClassStringOnJSXTag(tag, 'primary')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('className')
+    expect((classAttr.value as types.StringLiteral).value).toBe('button primary')
+  })
+})
+
+describe('addAttributeToJSXTag', () => {
+  it('adds an attribute with no value', () => {
+    const tag = createJSXTag('button')
+
+    addAttributeToJSXTag(tag, 'disabled')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('disabled')
+    expect(classAttr.value).toBe(null)
+  })
+
+  it('adds an attribute with false', () => {
+    const tag = createJSXTag('button')
+
+    addAttributeToJSXTag(tag, 'disabled', false)
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('disabled')
+    expect(
+      ((classAttr.value as types.JSXExpressionContainer).expression as types.BooleanLiteral).value
+    ).toBe(false)
+  })
+
+  it('adds an attribute with the selected value', () => {
+    const tag = createJSXTag('button')
+
+    addAttributeToJSXTag(tag, 'data-attr', 'random-value')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('data-attr')
+    expect((classAttr.value as types.StringLiteral).value).toBe('random-value')
+  })
+
+  it('adds an attribute as a JSX expression when non-string', () => {
+    const tag = createJSXTag('button')
+
+    addAttributeToJSXTag(tag, 'data-attr', 1)
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(classAttr.name.name).toBe('data-attr')
+    expect(
+      (
+        (classAttr.value as types.JSXExpressionContainer)
+          .expression as unknown as types.NumericLiteral
+      ).value
+    ).toBe(1)
+  })
+})
+
+describe('addRawAttributeToJSXTag', () => {
+  it('adds an attribute with string without encoding', () => {
+    const tag = createJSXTag('iframe')
+
+    addRawAttributeToJSXTag(tag, 'srcdoc', { type: 'raw', content: '<h1>Hello</h1>' })
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const classAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+
+    expect(classAttr.name.name).toBe('srcdoc')
+    const expression = (classAttr.value as types.JSXExpressionContainer).expression
+    expect(expression.type).toBe('TemplateLiteral')
+    expect((expression as types.TemplateLiteral).quasis[0].type).toBe('TemplateElement')
+
+    expect((expression as types.TemplateLiteral).quasis[0].value.raw).toBe('<h1>Hello</h1>')
+  })
+})
+
+describe('addDynamicAttributeToJSXTag', () => {
+  it('adds the dynamic JSX expression on the opening tag', () => {
+    const tag = createJSXTag('button')
+
+    addDynamicAttributeToJSXTag(tag, 'dynamicValue', 'title')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const dynamicAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(dynamicAttr.value.type).toBe('JSXExpressionContainer')
+    expect(
+      ((dynamicAttr.value as types.JSXExpressionContainer).expression as types.Identifier).name
+    ).toBe('title')
+  })
+
+  it('adds the dynamic JSX expression on the opening tag with prefix', () => {
+    const tag = createJSXTag('button')
+
+    addDynamicAttributeToJSXTag(tag, 'dynamicValue', 'title', 'props')
+    expect(tag.openingElement.attributes[0].type).toBe('JSXAttribute')
+
+    const dynamicAttr = tag.openingElement.attributes[0] as types.JSXAttribute
+    expect(dynamicAttr.value.type).toBe('JSXExpressionContainer')
+    expect((dynamicAttr.value as types.JSXExpressionContainer).expression.type).toBe(
+      'MemberExpression'
+    )
+  })
+})
+
+describe('ParsedASTNode', () => {
+  it('should create ASTNode', () => {
+    const result = new ParsedASTNode('test')
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('ast')
+    expect(result.ast).toBe('test')
+  })
+})
+describe('convertValueToLiteral', () => {
+  it('should convert value to literal', () => {
+    const result = convertValueToLiteral('test') as types.StringLiteral
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result).toHaveProperty('value')
+    expect(result.type).toEqual('StringLiteral')
+    expect(result.value).toEqual('test')
+  })
+  it('should convert number value to numerical literal', () => {
+    const result = convertValueToLiteral(2, 'number') as types.NumericLiteral
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result).toHaveProperty('value')
+    expect(result.type).toEqual('NumericLiteral')
+    expect(result.value).toEqual(2)
+  })
+  it('should convert boolean value to boolean literal', () => {
+    const result = convertValueToLiteral(true, 'boolean') as types.BooleanLiteral
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result).toHaveProperty('value')
+    expect(result.type).toEqual('BooleanLiteral')
+    expect(result.value).toEqual(true)
+  })
+  it('should convert object value to boolean literal', () => {
+    const result = convertValueToLiteral({ test: true }, 'object') as types.ObjectExpression
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result).toHaveProperty('properties')
+    expect(result.type).toEqual('ObjectExpression')
+    expect(result.properties.length).toEqual(1)
+    const property = result.properties[0] as types.ObjectProperty
+    expect(property).toHaveProperty('key')
+    expect(property.key.type).toBe('StringLiteral')
+    // @ts-ignore
+    expect(property.key.value).toBe('test')
+    expect(property).toHaveProperty('value')
+    expect(property.value.type).toBe('BooleanLiteral')
+    expect((property.value as types.BooleanLiteral).value).toBe(true)
+  })
+  it('should convert array value to literals', () => {
+    const testArray = ['test', 'testAgain', 'andAgain']
+    const result = convertValueToLiteral(testArray) as types.ArrayExpression
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result.type).toBe('ArrayExpression')
+    expect(result).toHaveProperty('elements')
+    expect(result.elements.length).toEqual(testArray.length)
+  })
+  it('should convert identifier value to literal', () => {
+    const result = convertValueToLiteral(String)
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result.type).toBe('Identifier')
+  })
+  it('returns a null literal for null or undefined', () => {
+    expect(convertValueToLiteral(null).type).toBe('NullLiteral')
+    expect(convertValueToLiteral(undefined).type).toBe('NullLiteral')
+  })
+})
+
+describe('objectToObjectExpression', () => {
+  it('should transform object to object expression', () => {
+    const objTest = {
+      stringKey: 'test',
+      booleanKey: true,
+      numberKey: 2,
+      arrayKey: ['test', 'testAgain'],
+      objectKey: {
+        identifierKey: String,
+      },
+    }
+    const result = objectToObjectExpression(objTest)
+
+    expect(typeof result).toBe('object')
+    expect(result).toHaveProperty('type')
+    expect(result).toHaveProperty('properties')
+    expect(result.properties.length).toEqual(Object.keys(objTest).length)
+    expect(result.properties.length).toEqual(Object.keys(objTest).length)
+  })
+  // tslint:disable-next-line:no-any
+  const objectTest: Record<string, any> = {
+    arrayKey: { key: Array },
+    numberKey: { key: Number },
+    stringKey: { key: String },
+    booleanKey: { key: Boolean },
+    objectKey: { key: Object },
+    astKey: { key: new ParsedASTNode('') },
+  }
+  Object.keys(objectTest).map((key) => {
+    it(`should transform ${key} object to object expression`, () => {
+      const result = objectToObjectExpression(objectTest[key])
+      expect(typeof result).toBe('object')
+      expect(result).toHaveProperty('type')
+      expect(result).toHaveProperty('properties')
+      expect(result.type).toEqual('ObjectExpression')
+    })
+  })
+})
+
+describe('collectGlobalReferencesFromObjectStates', () => {
+  it('resolves refPath-style global references (no explicit id) via GLOBAL_REF_ID_MAP', () => {
+    const stateDefinitions = {
+      profileViewer: {
+        type: 'object',
+        defaultValue: {
+          currentUserId: {
+            type: 'dynamic',
+            content: {
+              referenceType: 'global',
+              refPath: ['Current User', 'id'],
+            },
+          },
+        },
+      },
+    }
+    const refs = collectGlobalReferencesFromObjectStates(stateDefinitions as never)
+    expect(refs).toContain('currentUser')
+  })
+
+  it('resolves id-style global references untouched', () => {
+    const stateDefinitions = {
+      cartViewer: {
+        type: 'object',
+        defaultValue: {
+          itemCount: {
+            type: 'dynamic',
+            content: { referenceType: 'global', id: 'cart', refPath: ['items', 'length'] },
+          },
+        },
+      },
+    }
+    const refs = collectGlobalReferencesFromObjectStates(stateDefinitions as never)
+    expect(refs).toContain('cart')
+  })
+})
+
+describe('createStateHookAST – urlSearchParamBinding', () => {
+  const codeOf = (node: types.Node) => generator(node).code
+
+  it('emits plain useState(defaultValue) when no binding is declared', () => {
+    const decl = createStateHookAST('openPanel', {
+      type: 'boolean',
+      defaultValue: false,
+    })
+    expect(codeOf(decl)).toBe('const [openPanel, setOpenPanel] = useState(false);')
+  })
+
+  it('seeds useState from window.location.search falling back to the declared default', () => {
+    // Deliberately uses `window.location.search` rather than `router.query`
+    // because on SSG pages `router.query` is empty on the first render and
+    // only hydrates after `router.isReady` flips — past that, `useState`'s
+    // initializer has already captured the fallback default. Direct reads
+    // from `window.location.search` are synchronously available on both
+    // direct loads and client-side navigations.
+    const decl = createStateHookAST('products_detail_panel_item_id', {
+      type: 'string',
+      defaultValue: '',
+      urlSearchParamBinding: { key: 'products_detail_panel_item_id' },
+    })
+    expect(codeOf(decl)).toBe(
+      'const [products_detail_panel_item_id, setProductsDetailPanelItemId] = useState((typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("products_detail_panel_item_id") : null) ?? "");'
+    )
+  })
+
+  it('falls back to a non-empty static default when the param is absent', () => {
+    const decl = createStateHookAST('category', {
+      type: 'string',
+      defaultValue: 'all',
+      urlSearchParamBinding: { key: 'category' },
+    })
+    expect(codeOf(decl)).toBe(
+      'const [category, setCategory] = useState((typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("category") : null) ?? "all");'
+    )
+  })
+
+  it('ignores urlSearchParamBinding with an empty key (defensive)', () => {
+    const decl = createStateHookAST('foo', {
+      type: 'string',
+      defaultValue: 'x',
+      urlSearchParamBinding: { key: '' },
+    })
+    expect(codeOf(decl)).toBe('const [foo, setFoo] = useState("x");')
+  })
+
+  it('prefers dataSourceBinding over urlSearchParamBinding when both are declared', () => {
+    const decl = createStateHookAST('mixed', {
+      type: 'string',
+      defaultValue: 'fallback',
+      dataSourceBinding: { dataSourceId: 'ds', refPath: [] },
+      urlSearchParamBinding: { key: 'mixed' },
+    })
+    // dataSourceBinding path short-circuits: props.mixed !== undefined ? props.mixed : "fallback"
+    expect(codeOf(decl)).toBe(
+      'const [mixed, setMixed] = useState(props.mixed !== undefined ? props.mixed : "fallback");'
+    )
+  })
+})
+
+describe('sanitizeExprContent', () => {
+  const originalWarn = console.warn
+  beforeEach(() => {
+    console.warn = jest.fn()
+  })
+  afterEach(() => {
+    console.warn = originalWarn
+  })
+
+  it('passes through well-formed expressions unchanged', () => {
+    const expr = '`/profile/' + '$' + '{' + 'currentUser?.id}' + '`'
+    expect(sanitizeExprContent(expr, 'href')).toBe(expr)
+    expect((console.warn as jest.Mock).mock.calls.length).toBe(0)
+  })
+
+  it('repairs the /profile/${} My Profile navlink pattern', () => {
+    const expr = '`/profile/' + '$' + '{}' + '`'
+    expect(sanitizeExprContent(expr, 'href')).toBe(
+      '`/profile/' + '$' + '{' + 'currentUser?.id}' + '`'
+    )
+    expect((console.warn as jest.Mock).mock.calls.length).toBe(1)
+  })
+
+  it('repairs generic empty ${} with an empty-string placeholder', () => {
+    const expr = '`/unknown/' + '$' + '{}' + '/edit`'
+    expect(sanitizeExprContent(expr, 'href')).toBe(
+      '`/unknown/' + '$' + '{' + "'" + "'" + '}' + '/edit`'
+    )
+    expect((console.warn as jest.Mock).mock.calls.length).toBe(1)
+  })
+})

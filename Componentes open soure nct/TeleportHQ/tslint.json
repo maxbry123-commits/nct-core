@@ -1,0 +1,50 @@
+{
+  "defaultSeverity": "error",
+  "extends": [
+    "tslint:latest",
+    "tslint-config-prettier"
+  ],
+  "rules": {
+    "array-type": [true, "array-simple"],
+    "interface-name": [true, "never-prefix"],
+    "max-classes-per-file": false,
+    "member-ordering": [true, {"order": "statics-first"}],
+    "no-any": false,
+    "no-arg": true,
+    "no-bitwise": true,
+    "no-console": [
+      true,
+      "log",
+      "error",
+      "debug",
+      "time",
+      "timeEnd"
+    ],
+    "prefer-for-of": false,
+    "no-debugger": true,
+    "no-implicit-dependencies": false,
+    "no-object-literal-type-assertion": false,
+    "no-shadowed-variable": true,
+    "no-submodule-imports": false,
+    "no-switch-case-fall-through": true,
+    "no-this-assignment": [true, {"allow-destructuring": true}],
+    "no-null-undefined-union": true,
+    "object-literal-sort-keys": false,
+    "ordered-imports": false,
+    "switch-default": true,
+    "variable-name": [
+      true,
+      "ban-keywords",
+      "check-format",
+      "allow-pascal-case",
+      "allow-snake-case",
+      "allow-leading-underscore"
+    ],
+    "only-arrow-functions": false,
+    "curly": false,
+    "prefer-conditional-expression": false,
+    "no-unused-expression": false,
+    "function-constructor": false,
+    "no-empty": false
+  }
+}

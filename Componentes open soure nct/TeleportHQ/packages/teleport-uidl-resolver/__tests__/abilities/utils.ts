@@ -1,0 +1,533 @@
+import { insertLinks, createLinkNode } from '../../src/resolvers/abilities/utils'
+import { elementNode } from '@teleporthq/teleport-uidl-builders'
+import {
+  urlMockedDefinition,
+  navlinkMockedDefinition,
+  exprNavlinkMockedDefinition,
+  phoneMockedDefinition,
+  mailMockedDefinition,
+  sectionMockedDefinition,
+  linkTypePropDefinitions,
+  linkTypePropDynamicReference,
+} from './mocks'
+import {
+  GeneratorOptions,
+  UIDLDynamicReference,
+  UIDLElementNode,
+  UIDLExpressionValue,
+  UIDLURLLinkNode,
+} from '@teleporthq/teleport-types'
+
+const flexProjectStyleSetOptions = (display: string): GeneratorOptions => ({
+  projectStyleSet: {
+    styleSetDefinitions: {
+      'tq-scroll-row': {
+        type: 'reusable-project-style-map',
+        content: { display: { type: 'static', content: display } },
+      },
+    },
+    fileName: 'style',
+    path: '.',
+  },
+})
+
+describe('insertLink', () => {
+  it('wraps a simple element', () => {
+    const node = elementNode('container')
+    const link = urlMockedDefinition() as UIDLURLLinkNode
+    node.content.abilities = { link }
+
+    const result = insertLinks(node, {}, false)
+    expect(result.content.elementType).toBe('link')
+    expect(result.content.attrs.url.content).toBe(link.content.url.content)
+  })
+
+  it('replaces a child', () => {
+    const node = elementNode('container', {}, [
+      elementNode('container'),
+      elementNode('container'),
+      elementNode('container'),
+    ])
+
+    const secondChild = node.content.children[1] as UIDLElementNode
+
+    const link = urlMockedDefinition() as UIDLURLLinkNode
+    secondChild.content.abilities = { link }
+
+    const result = insertLinks(node, {}, false)
+    const secondChildAfterInsertLinks = result.content.children[1] as UIDLElementNode
+
+    expect(secondChildAfterInsertLinks.content.elementType).toBe('link')
+    expect(secondChildAfterInsertLinks.content.attrs.url.content).toBe(link.content.url.content)
+  })
+
+  it('works with a navlink without page settings', () => {
+    const node = elementNode('container', {}, [
+      elementNode('container'),
+      elementNode('container'),
+      elementNode('container'),
+    ])
+
+    const secondChild = node.content.children[1] as UIDLElementNode
+
+    const navlink = navlinkMockedDefinition()
+    secondChild.content.abilities = { link: navlink }
+
+    const result = insertLinks(node, {}, false)
+    const secondChildAfterInsertLinks = result.content.children[1] as UIDLElementNode
+
+    expect(secondChildAfterInsertLinks.content.elementType).toBe('navlink')
+    expect(secondChildAfterInsertLinks.content.attrs.transitionTo.content).toBe(
+      `/${navlink.content.routeName.content}`
+    )
+  })
+
+  it('passes through an expr-based navlink routeName unchanged', () => {
+    const node = elementNode('container', {}, [elementNode('container'), elementNode('container')])
+
+    const secondChild = node.content.children[1] as UIDLElementNode
+
+    const navlink = exprNavlinkMockedDefinition()
+    secondChild.content.abilities = { link: navlink }
+
+    const result = insertLinks(node, {}, false)
+    const secondChildAfterInsertLinks = result.content.children[1] as UIDLElementNode
+
+    expect(secondChildAfterInsertLinks.content.elementType).toBe('navlink')
+    expect(secondChildAfterInsertLinks.content.attrs.transitionTo).toEqual({
+      type: 'expr',
+      content: '`/blog/' + '$' + '{' + 'blogPost?.slug}' + '`',
+    })
+  })
+
+  it('passes through an expr-based navlink even with projectRouteDefinition', () => {
+    const node = elementNode('container')
+
+    const navlink = exprNavlinkMockedDefinition()
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [
+            {
+              value: 'home',
+              pageOptions: {
+                navLink: '/main-page',
+              },
+            },
+          ],
+        },
+      },
+      false
+    )
+
+    expect(result.content.elementType).toBe('navlink')
+    expect(result.content.attrs.transitionTo).toEqual({
+      type: 'expr',
+      content: '`/blog/' + '$' + '{' + 'blogPost?.slug}' + '`',
+    })
+  })
+
+  it('works with a navlink with page settings', () => {
+    const node = elementNode('container', {}, [
+      elementNode('container'),
+      elementNode('container'),
+      elementNode('container'),
+    ])
+
+    const secondChild = node.content.children[1] as UIDLElementNode
+
+    const navlink = navlinkMockedDefinition()
+    secondChild.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [
+            {
+              value: 'home',
+              pageOptions: {
+                navLink: '/main-page',
+              },
+            },
+          ],
+        },
+      },
+      false
+    )
+    const secondChildAfterInsertLinks = result.content.children[1] as UIDLElementNode
+
+    expect(secondChildAfterInsertLinks.content.elementType).toBe('navlink')
+    expect(secondChildAfterInsertLinks.content.attrs.transitionTo.content).toBe(`/main-page`)
+  })
+
+  it('emits a template-literal transitionTo when differentiatorValue is set', () => {
+    const node = elementNode('container')
+
+    const navlink = navlinkMockedDefinition()
+    // Point at the /profile route and append the logged-in user's id, as per
+    // the GenericDetailsNavlinkContent contract for the auth profile page.
+    navlink.content.routeName = { type: 'static', content: 'profile' }
+    navlink.content.differentiatorValue = {
+      type: 'dynamic',
+      content: {
+        referenceType: 'global',
+        refPath: ['Current User', 'id'],
+      },
+    } as never
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [
+            {
+              value: 'profile',
+              pageOptions: { navLink: '/profile' },
+            },
+          ],
+        },
+      },
+      false
+    )
+
+    expect(result.content.elementType).toBe('navlink')
+    expect(result.content.attrs.transitionTo).toEqual({
+      type: 'expr',
+      content: '`/profile/' + '$' + '{' + 'currentUser?.id}' + '`',
+    })
+  })
+
+  it('resolves a navlink whose route value carries a folder prefix', () => {
+    // A details page's route value is folder-qualified (`add-event/Add-Event`)
+    // while the navlink still names the page (`Add-Event`). Matching only on
+    // the whole value missed every one of them and silently fabricated
+    // `/add-event` — a path with no file behind it.
+    const node = elementNode('container')
+    const navlink = navlinkMockedDefinition()
+    navlink.content.routeName = { type: 'static', content: 'Guild-Details' }
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [{ value: 'guild-details/Guild-Details', pageOptions: { navLink: '/guilds' } }],
+        },
+      },
+      false
+    )
+
+    expect(result.content.attrs.transitionTo.content).toBe('/guilds')
+  })
+
+  it('does not guess when two folders hold a page of the same name', () => {
+    const node = elementNode('container')
+    const navlink = navlinkMockedDefinition()
+    navlink.content.routeName = { type: 'static', content: 'Details' }
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [
+            { value: 'events/Details', pageOptions: { navLink: '/events/detail' } },
+            { value: 'guilds/Details', pageOptions: { navLink: '/guilds/detail' } },
+          ],
+        },
+      },
+      false
+    )
+
+    // Ambiguous → the pre-existing fallback, not an arbitrary pick.
+    expect(result.content.attrs.transitionTo.content).toBe('/details')
+  })
+
+  it('refuses to link a dynamic route that has no record id to fill it', () => {
+    // `/rsvp-event/[id]` is a TEMPLATE. Without a differentiator there is no id
+    // to substitute, so neither the template (a literal `[id]` in the address
+    // bar) nor the bare prefix (`/rsvp-event`, which matches no file) is
+    // navigable. Run 798e2775 shipped the bare prefix in the global footer of
+    // all 17 pages.
+    const node = elementNode('container')
+    const navlink = navlinkMockedDefinition()
+    navlink.content.routeName = { type: 'static', content: 'Add-Event' }
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [{ value: 'add-event/Add-Event', pageOptions: { navLink: '/add-event/[id]' } }],
+        },
+      },
+      false
+    )
+
+    expect(result.content.attrs.transitionTo.content).toBe('#')
+  })
+
+  it('still builds the record URL for a dynamic route WITH a differentiator', () => {
+    // The row-scoped case must keep working — it is the reason dynamic routes
+    // exist, and it is what the guard above must not touch.
+    const node = elementNode('container')
+    const navlink = navlinkMockedDefinition()
+    navlink.content.routeName = { type: 'static', content: 'Event-Details' }
+    navlink.content.differentiatorValue = {
+      type: 'dynamic',
+      content: { referenceType: 'global', refPath: ['Current User', 'id'] },
+    } as never
+    node.content.abilities = { link: navlink }
+
+    const result = insertLinks(
+      node,
+      {
+        projectRouteDefinition: {
+          type: 'route',
+          defaultValue: 'home',
+          values: [
+            { value: 'event-details/Event-Details', pageOptions: { navLink: '/event-details' } },
+          ],
+        },
+      },
+      false
+    )
+
+    expect(result.content.attrs.transitionTo).toEqual({
+      type: 'expr',
+      content: '`/event-details/' + '$' + '{' + 'currentUser?.id}' + '`',
+    })
+  })
+
+  it('marks the link wrapper display:contents when the flex parent uses a project-referenced style', () => {
+    const child = elementNode('container')
+    child.content.abilities = { link: navlinkMockedDefinition() }
+    child.content.referencedStyles = {
+      TQ_tile: {
+        id: 'TQ_tile',
+        type: 'style-map',
+        content: { mapType: 'project-referenced', referenceId: 'category-tile' },
+      },
+    }
+    const parent = elementNode('container', {}, [child])
+    parent.content.referencedStyles = {
+      TQ_row: {
+        id: 'TQ_row',
+        type: 'style-map',
+        content: { mapType: 'project-referenced', referenceId: 'tq-scroll-row' },
+      },
+    }
+
+    const result = insertLinks(parent, flexProjectStyleSetOptions('flex'), false)
+    const wrapper = result.content.children[0] as UIDLElementNode
+
+    expect(wrapper.content.elementType).toBe('navlink')
+    expect(wrapper.content.style?.display).toEqual({ type: 'static', content: 'contents' })
+    // the original styled node stays inside the wrapper, keeping its class
+    const styledChild = wrapper.content.children[0] as UIDLElementNode
+    expect(styledChild.content.referencedStyles?.TQ_tile).toBeDefined()
+  })
+
+  it('does not mark the link wrapper display:contents when the referenced parent is not flex/grid', () => {
+    const child = elementNode('container')
+    child.content.abilities = { link: navlinkMockedDefinition() }
+    const parent = elementNode('container', {}, [child])
+    parent.content.referencedStyles = {
+      TQ_row: {
+        id: 'TQ_row',
+        type: 'style-map',
+        content: { mapType: 'project-referenced', referenceId: 'tq-scroll-row' },
+      },
+    }
+
+    const result = insertLinks(parent, flexProjectStyleSetOptions('block'), false)
+    const wrapper = result.content.children[0] as UIDLElementNode
+
+    expect(wrapper.content.elementType).toBe('navlink')
+    expect(wrapper.content.style?.display).toBeUndefined()
+  })
+
+  it('sees through box-less ancestors to the real flex parent', () => {
+    /* The regression this exists for. A linked card almost never sits directly
+       inside its grid — it sits inside a repeater, inside a data provider,
+       inside a fragment, none of which draw a box. Asking the IMMEDIATE parent
+       "are you a flex container?" answered no, the wrapper was left as a normal
+       box, and it became the flex item instead of the card: every card lost its
+       `flex: 0 0 <width>` and collapsed to content width. The published grid
+       stopped matching the editor, which renders no wrapper at all. */
+    const card = elementNode('container')
+    card.content.abilities = { link: navlinkMockedDefinition() }
+
+    const fragment = elementNode('fragment', {}, [card])
+    const grid = elementNode('container', {}, [fragment])
+    grid.content.referencedStyles = {
+      TQ_row: {
+        id: 'TQ_row',
+        type: 'style-map',
+        content: { mapType: 'project-referenced', referenceId: 'tq-scroll-row' },
+      },
+    }
+
+    const result = insertLinks(grid, flexProjectStyleSetOptions('flex'), false)
+    const resolvedFragment = result.content.children[0] as UIDLElementNode
+    const wrapper = resolvedFragment.content.children[0] as UIDLElementNode
+
+    expect(wrapper.content.elementType).toBe('navlink')
+    expect(wrapper.content.style?.display).toEqual({ type: 'static', content: 'contents' })
+  })
+
+  it('still ignores box-less ancestors when the real parent is not flex/grid', () => {
+    // The transparency walk must not manufacture a flex parent that isn't there.
+    const card = elementNode('container')
+    card.content.abilities = { link: navlinkMockedDefinition() }
+
+    const fragment = elementNode('fragment', {}, [card])
+    const block = elementNode('container', {}, [fragment])
+    block.content.referencedStyles = {
+      TQ_row: {
+        id: 'TQ_row',
+        type: 'style-map',
+        content: { mapType: 'project-referenced', referenceId: 'tq-scroll-row' },
+      },
+    }
+
+    const result = insertLinks(block, flexProjectStyleSetOptions('block'), false)
+    const resolvedFragment = result.content.children[0] as UIDLElementNode
+    const wrapper = resolvedFragment.content.children[0] as UIDLElementNode
+
+    expect(wrapper.content.elementType).toBe('navlink')
+    expect(wrapper.content.style?.display).toBeUndefined()
+  })
+})
+
+describe('insertLink with link-type prop', () => {
+  it('wraps a container element with a link when link ability references a link-type prop', () => {
+    const node = elementNode('container')
+    node.content.abilities = { link: linkTypePropDynamicReference() }
+
+    const result = insertLinks(node, {}, false, undefined, linkTypePropDefinitions())
+
+    // The wrapper should be a link (maps to <a> by default, <Link> in Next.js via project mapping)
+    expect(result.content.elementType).toBe('prop-link')
+
+    // url is resolved tolerantly: a link prop can be bound to a plain string
+    // (e.g. an Airtable URL column) instead of a `{ url, newTab }` object, so we
+    // use the string directly when it is one and fall back to `.url` otherwise.
+    const url = result.content.attrs.url as UIDLExpressionValue
+    expect(url.type).toBe('expr')
+    expect(url.content).toContain(`typeof props.cardLink === 'string'`)
+    expect(url.content).toContain(`props.cardLink?.['url']`)
+
+    // target and rel should be expr ternaries for newTab
+    expect(result.content.attrs.target.type).toBe('expr')
+    expect(result.content.attrs.target.content).toContain('newTab')
+    expect(result.content.attrs.rel.type).toBe('expr')
+    expect(result.content.attrs.rel.content).toContain('noreferrer noopener')
+
+    // The original container should be a child of the link wrapper
+    const child = result.content.children[0] as UIDLElementNode
+    expect(child.content.elementType).toBe('container')
+  })
+
+  it('replaces a button element inline with link for link-type prop', () => {
+    const node = elementNode('button')
+    node.content.abilities = { link: linkTypePropDynamicReference() }
+
+    const result = insertLinks(node, {}, false, undefined, linkTypePropDefinitions())
+
+    // Button should be replaced inline (not wrapped)
+    expect(result.content.elementType).toBe('prop-link')
+    expect(result.content.semanticType).toBe('')
+
+    const url = result.content.attrs.url as UIDLExpressionValue
+    expect(url.type).toBe('expr')
+    expect(url.content).toContain(`typeof props.cardLink === 'string'`)
+    expect(url.content).toContain(`props.cardLink?.['url']`)
+  })
+
+  it('replaces a text span element inline with link for link-type prop', () => {
+    const node = elementNode('text')
+    node.content.semanticType = 'span'
+    node.content.abilities = { link: linkTypePropDynamicReference() }
+
+    const result = insertLinks(node, {}, false, undefined, linkTypePropDefinitions())
+
+    expect(result.content.elementType).toBe('prop-link')
+    expect(result.content.semanticType).toBe('')
+
+    const url = result.content.attrs.url as UIDLExpressionValue
+    expect(url.type).toBe('expr')
+    expect(url.content).toContain(`typeof props.cardLink === 'string'`)
+    expect(url.content).toContain(`props.cardLink?.['url']`)
+  })
+
+  it('falls back to existing dynamic link behavior when prop is not link-type', () => {
+    const node = elementNode('container')
+    const dynamicLink: UIDLDynamicReference = {
+      type: 'dynamic',
+      content: {
+        referenceType: 'prop',
+        id: 'someStringProp',
+      },
+    }
+    node.content.abilities = { link: dynamicLink }
+
+    // Pass prop definitions where the referenced prop is type 'string', not 'link'
+    const result = insertLinks(node, {}, false, undefined, {
+      someStringProp: { type: 'string', defaultValue: '/about' },
+    })
+
+    // Should fall through to existing dynamic link handling (navlink with transitionTo)
+    expect(result.content.elementType).toBe('navlink')
+    expect(result.content.attrs.transitionTo.type).toBe('dynamic')
+    // Should NOT have refPath since it's the old behavior
+    expect(
+      (result.content.attrs.transitionTo as UIDLDynamicReference).content.refPath
+    ).toBeUndefined()
+  })
+})
+
+describe('createLink', () => {
+  it('creates a phone link', () => {
+    const link = phoneMockedDefinition()
+    const result = createLinkNode(link, {})
+
+    expect(result.content.elementType).toBe('link')
+    expect(result.content.attrs.url.content).toBe(`tel:${link.content.phone}`)
+  })
+
+  it('creates a mail link', () => {
+    const link = mailMockedDefinition()
+    const result = createLinkNode(link, {})
+
+    expect(result.content.elementType).toBe('link')
+    expect(result.content.attrs.url.content).toBe(
+      `mailto:${link.content.mail}?subject=${link.content.subject}&body=${link.content.body}`
+    )
+  })
+
+  it('creates a section link', () => {
+    const link = sectionMockedDefinition()
+    const result = createLinkNode(link, {})
+
+    expect(result.content.elementType).toBe('link')
+    expect(result.content.attrs.url.content).toBe(`#${link.content.section.content}`)
+  })
+})

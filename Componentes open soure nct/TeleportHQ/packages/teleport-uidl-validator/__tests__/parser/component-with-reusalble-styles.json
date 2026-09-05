@@ -1,0 +1,117 @@
+{
+    "name": "ComponentWithPrimitiveProps",
+    "styleSetDefinitions": {
+        "primaryButton": {
+            "type": "reusable-project-style-map",
+            "content": {
+              "background": "blue",
+              "width": "auto",
+              "color": "#fff",
+              "border": "1px solid #fff"
+            }
+        },
+        "secondaryButton": {
+            "type": "reusable-project-style-map",
+            "content": {
+                "background": "red",
+                "width": "auto",
+                "color": "#fff",
+                "border": "1px solid #fff"
+            }
+        }
+    },
+    "propDefinitions": {
+      "test": {
+        "type": "string",
+        "defaultValue": "123"
+      },
+      "content": {
+        "type": "object",
+        "defaultValue": {
+          "heading": "Hello World"
+        }
+      }
+    },
+    "node": {
+      "type": "element",
+      "content": {
+        "elementType": "container",
+        "referencedStyles": {},
+        "style": {
+          "flexDirection": {
+            "type": "dynamic",
+            "content": {
+              "referenceType":"prop",
+              "id": "test"
+            }
+          },
+          "alignSelf": {"type":"static", "content": "center"}
+        },
+  
+        "attrs": {
+          "data-test": {
+            "type": "dynamic",
+            "content": {
+              "referenceType":"prop",
+              "id": "test"
+            }
+          },
+          "data-static": { "type":"static", "content":"I am just a static string"},
+          "data-inner-value": {
+                  "type": "dynamic",
+                  "content": {
+                    "referenceType":"prop",
+                    "id": "content.heading"
+                  }
+                }
+        },
+        
+        "children": [
+          {"type":"static", "content": "hello I am a test"},
+          {"type": "dynamic", "content": {"referenceType": "prop", "id": "content.heading"}},
+          {"type": "dynamic", "content": {"referenceType":"prop", "id": "children"}},
+          {
+            "type": "element",
+            "content": {
+              "elementType": "container",
+              
+              "style": {
+                "flexDirection": {
+                  "type": "dynamic",
+                  "content": {
+                    "referenceType":"prop",
+                    "id": "test"
+                  }
+                },
+                "alignSelf": {"type":"static", "content": "center"}
+              },
+        
+              "attrs": {
+                "data-test": {
+                  "type": "dynamic",
+                  "content": {
+                    "referenceType":"prop",
+                    "id": "test"
+                  }
+                },
+                "data-static": { "type":"static", "content":"I am just a static string"},
+                "data-inner-value": {
+                  "type": "dynamic",
+                  "content": {
+                    "referenceType":"prop",
+                    "id": "content.heading"
+                  }
+                }
+              },
+  
+              "children": [
+                {"type":"static", "content": "hello I am a test"},
+                {"type": "dynamic", "content": {"referenceType": "prop", "id": "content.heading"}},
+                {"type": "dynamic", "content": {"referenceType": "prop", "id": "children"}}
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }

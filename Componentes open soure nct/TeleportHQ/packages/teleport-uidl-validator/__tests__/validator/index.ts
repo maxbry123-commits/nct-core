@@ -1,0 +1,236 @@
+import { Validator } from '../../src'
+
+// @ts-ignore
+import ComponentUidlElementWithEmptyName from './component-element-with-empty-name.json'
+// @ts-ignore
+import componentUidlWithEventModifierUndefined from './component-uidl-with-event-modifier-undefined.json'
+// @ts-ignore
+import invalidComponentUidlSample from './component-invalid-sample.json'
+// @ts-ignore
+import projectUidlSample from './project-sample.json'
+// @ts-ignore
+import oldInvalidProjectUidlSample from './old-project-invalid-sample.json'
+// @ts-ignore
+import invalidProjectUidlSample from './project-invalid-sample.json'
+// @ts-ignore
+import noRouteProjectUidlSample from './project-invalid-sample-no-route.json'
+import uidlWithNull from './component-uidl-with-null-undefined.json'
+
+import {
+  component,
+  definition,
+  repeatNode,
+  dynamicNode,
+  elementNode,
+} from '@teleporthq/teleport-uidl-builders'
+import { ComponentUIDL, UIDLStyleInlineAsset } from '@teleporthq/teleport-types'
+import { parseProjectJSON } from '../../src/parser'
+
+const uidl = component(
+  'Repeat Component',
+  elementNode(
+    'container',
+    { fields: { type: 'dynamic', content: { referenceType: 'prop', id: 'fields["bg Image"]' } } },
+    [
+      repeatNode(
+        elementNode('div', {}, [dynamicNode('local', 'item')]),
+        dynamicNode('prop', 'items'),
+        {
+          useIndex: true,
+        }
+      ),
+    ]
+  ),
+  {
+    items: definition('array', ['hello', 'world']),
+    fields: definition('object', { 'bg Image': 'test' }),
+  },
+  { items: definition('array', ['hello', 'world']) }
+)
+
+describe('Validate UIDL', () => {
+  it('Component UIDL with null /  undefined in the JSON', () => {
+    const validator = new Validator()
+    expect(() =>
+      validator.validateComponentSchema(uidlWithNull as unknown as Record<string, unknown>)
+    ).toThrow(Error)
+  })
+
+  describe('Component UIDL Format', () => {
+    it('returns object with valid=true and errorMsg="" if uidl is valid', () => {
+      const validator = new Validator()
+      const validationResult = validator.validateComponentSchema(
+        uidl as unknown as Record<string, unknown>
+      )
+
+      expect(typeof validationResult).toBe('object')
+      expect(validationResult.valid).toEqual(true)
+      expect(validationResult.errorMsg).toEqual('')
+      expect(typeof validationResult.componentUIDL).toBe('object')
+    })
+
+    it('returns customized errors', () => {
+      const validator = new Validator()
+      expect(() => validator.validateComponentSchema(invalidComponentUidlSample)).toThrow(Error)
+    })
+  })
+
+  describe('Component UIDL Content', () => {
+    it('returns object with valid=true and errorMSG="" if everything is ok', () => {
+      const validator = new Validator()
+      const validationResult = validator.validateComponentContent(uidl)
+
+      expect(typeof validationResult).toBe('object')
+      expect(validationResult.valid).toEqual(true)
+      expect(validationResult.errorMsg).toEqual('')
+    })
+
+    it('throws error if prop and state is used but not defined in propDefinitions', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      expect(() => validator.validateComponentContent(invalidComponentUidlSample)).toThrow(Error)
+
+      //       expect(validationResult.errorMsg).toBe(
+      //         `\nUIDL Component Content Validation Error. Please check the following:
+      // "titles" is used but not defined. Please add it in propDefinitions,
+      // "isVisibles" is used but not defined. Please add it in stateDefinitions,
+      // Index variable is used but the "useIndex" meta information is false.,
+      // "item" is used in the "repeat" structure but the iterator name has this value: "item-test"`
+      //       )
+    })
+
+    it('throws error if prop and state is used but not defined in propDefinitions', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      expect(() => validator.validateComponentContent(invalidComponentUidlSample)).toThrow(Error)
+
+      //       expect(validationResult.errorMsg).toBe(
+      //         `\nUIDL Component Content Validation Error. Please check the following:
+      // "titles" is used but not defined. Please add it in propDefinitions,
+      // "isVisibles" is used but not defined. Please add it in stateDefinitions,
+      // Index variable is used but the "useIndex" meta information is false.,
+      // "item" is used in the "repeat" structure but the iterator name has this value: "item-test"`
+      //       )
+    })
+
+    it('does not throw error if props and states have same keys', () => {
+      const validator = new Validator()
+      const warn = jest.spyOn(global.console, 'warn')
+
+      const validationResult = validator.validateComponentContent(uidl)
+
+      expect(typeof validationResult).toBe('object')
+      expect(validationResult.valid).toEqual(true)
+      expect(validationResult.errorMsg).toEqual('')
+      expect(warn).toHaveBeenCalled()
+    })
+
+    it('throws an error if event is modifying the state, which is not defined in stateDefinitions', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      expect(() =>
+        validator.validateComponentContent(componentUidlWithEventModifierUndefined as ComponentUIDL)
+      ).toThrow(Error)
+
+      // expect(validationResult.errorMsg).toBe(
+      //   `\nUIDL Component Content Validation Error. Please check the following:
+      //    "isOpen" is used in events, but not defined. Please add it in stateDefinitions
+      // )
+    })
+  })
+
+  describe('Project UIDL Format', () => {
+    it('returns object with valid=true and errorMsg="" if uidl is valid', () => {
+      const validator = new Validator()
+      const validationResult = validator.validateProjectSchema(projectUidlSample)
+
+      expect(typeof validationResult).toBe('object')
+      expect(validationResult.valid).toEqual(true)
+      expect(validationResult.errorMsg).toEqual('')
+      expect(typeof validationResult.projectUIDL).toBe('object')
+    })
+
+    it('returns customized error', () => {
+      const validator = new Validator()
+      expect(() => validator.validateProjectSchema(invalidProjectUidlSample)).toThrow(Error)
+
+      //   expect(validationResult.errorMsg).toBe(
+      //     `\nUIDL Format Validation Error. Please check the following:
+      //  - Path input: the key 'name' is required but was not present.
+      //    is a DecoderError`
+      //   )
+    })
+
+    it('supports older UIDL version and returns customized error', () => {
+      const validator = new Validator()
+      expect(() => validator.validateProjectSchema(oldInvalidProjectUidlSample)).toThrow(Error)
+
+      // expect(validationResult.errorMsg).toBe(
+      //   `\nUIDL Format Validation Error. Please check the following:
+      //         - Path input: the key 'name' is required but was not present.
+      //         is a DecoderError`
+      // )
+    })
+
+    // The decoder rebuilds the UIDL from its declared keys, so any plugin-only
+    // top-level field MUST be declared or it is silently stripped before the
+    // generator plugins run. `analytics` gates the growth tracker injection —
+    // if this drops, no published project ever sends analytics events.
+    it('preserves the top-level `analytics` flag through validateProjectSchema', () => {
+      const validator = new Validator()
+      const withAnalytics = {
+        ...(projectUidlSample as Record<string, unknown>),
+        analytics: { enabled: true },
+      }
+
+      const { projectUIDL } = validator.validateProjectSchema(withAnalytics)
+
+      expect((projectUIDL as { analytics?: { enabled?: boolean } }).analytics).toEqual({
+        enabled: true,
+      })
+    })
+  })
+
+  describe('Project UIDL Content', () => {
+    it('returns object with valid=true and errorMsg="" if uidl content is valid', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      const validationResult = validator.validateProjectContent(projectUidlSample)
+
+      expect(typeof validationResult).toBe('object')
+      expect(validationResult.valid).toEqual(true)
+      expect(validationResult.errorMsg).toEqual('')
+    })
+
+    it('returns customized error if content is not properly defined', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      expect(() => validator.validateProjectContent(invalidProjectUidlSample)).toThrow(Error)
+
+      //       expect(validationResult.errorMsg).toEqual(
+      //         `\nUIDL Project Content Validation Error. Please check the following:
+      // The component "Navbars" is not defined in the UIDL's component section.,
+      // The following components have different name than their key: Navbar,OneComponent,
+      // Root Node contains elements of type "static". It should contain only elements of type "conditional",
+      // Root Node contains a route that don't have a specified state: abouts.`
+      //       )
+    })
+
+    it('returns error if route is missing from state definitions', () => {
+      const validator = new Validator()
+      // @ts-ignore
+      expect(() => validator.validateProjectContent(noRouteProjectUidlSample)).toThrow(Error)
+
+      // expect(validationResult.errorMsg).toEqual(
+      //   `\nUIDL Project Content Validation Error. Please check the following: Route is not defined in stateDefinitions`
+      // )
+    })
+  })
+})
+
+describe('Parses UIDL and then converts the key-values to key-static-nodes', () => {
+  it('Parsers key-values in attrs and converts to UIDL nodes', () => {
+    const parsedUIDL = parseProjectJSON(projectUidlSample)
+    expect((parsedUIDL.globals.assets[0] as UIDLStyleInlineAsset)?.attrs).toBeDefined()
+  })
+})
