@@ -1,0 +1,114 @@
+# COPIA QUIRÚRGICA de:
+# agentes/skills/skills Github acción/Code Github acción descargar y extracción/gha-download-extract.yml
+# workflow base blob: 4e64ca02c2bc970dc4cd246a2a43ec2fdb7b4e62
+# extractor canónico copiado: scripts/skill-lock/extract_existing_parts.py
+# extractor blob: 082e6f63980aff5e457837a3030af37892a7e069
+name: NCT ZIP Queue 39 • skill-copy
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.nct-action-triggers/nct-zip-queue-39-v1.txt'
+permissions:
+  contents: write
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+  GIT_TERMINAL_PROMPT: "0"
+concurrency:
+  group: nct-mount-single-writer
+  cancel-in-progress: false
+jobs:
+  download-extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+      - name: Execute EXTRACT_ONLY queue from locked skill
+        shell: bash
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+          GIT_LFS_SKIP_PUSH: "1"
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git config --global filter.lfs.smudge ''
+          git config --global filter.lfs.clean ''
+          git config --global filter.lfs.process ''
+          git config --global filter.lfs.required false
+          git config --global core.compression 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          ROOT='Componentes open soure nct'
+          MANIFEST="$ROOT/RESEARCH_DOWNLOAD_MANIFEST.jsonl"
+          EXTRACTOR='scripts/skill-lock/extract_existing_parts.py'
+          test -f "$EXTRACTOR"
+          test "$(git hash-object "$EXTRACTOR")" = '082e6f63980aff5e457837a3030af37892a7e069'
+
+          # 38 componentes extraíbles primero; Cline va último porque conserva GAP LFS conocido.
+          cat > "$RUNNER_TEMP/pending39.txt" <<'EOF'
+          Craft.js
+          Frappe-Builder
+          GrapesJS
+          MUSE
+          Mermaid
+          Mitosis
+          Motion
+          Onlook
+          OpenDesign
+          OpenPencil
+          Parcel
+          Penpot
+          PlantUML
+          Plasmic
+          PracticalSwan-agent-skills
+          Puck
+          Radix-UI
+          React-Cosmos
+          React-Spectrum
+          Silex
+          Storybook
+          TeleportHQ
+          ToolJet
+          TypeScript
+          Vite
+          VvvebJs
+          Webstudio
+          accessibility-skills
+          anthropic-skills
+          drawio
+          frontend-audit-skill
+          microsoft-skills
+          nolly-agent-skills
+          shadcn-ui
+          tldraw
+          ui-ux-pro-max-skill
+          wordpress-agent-skills
+          xyflow
+          Cline
+          EOF
+
+          test "$(wc -l < "$RUNNER_TEMP/pending39.txt")" -eq 39
+          while IFS= read -r component; do
+            meta="$(jq -r --arg slug "$component" 'select(.slug==$slug) | [.source,.source_commit,(.parts|tostring)] | @tsv' "$MANIFEST")"
+            test -n "$meta"
+            IFS=$'\t' read -r source source_commit expected_parts <<< "$meta"
+            echo "QUEUE_COMPONENT=$component parts=$expected_parts source=$source commit=$source_commit"
+            python3 "$EXTRACTOR" "$ROOT" "$component" "$source" "$source_commit" UNKNOWN "$expected_parts"
+            git add -f -- "$ROOT/$component"
+            git diff --cached --quiet && { echo "NO_DELTA component=$component"; continue; }
+            git commit -m "feat(nct): extract $component from existing ZIP parts"
+            git fetch origin main --depth=1
+            git merge-base --is-ancestor origin/main HEAD || { echo "STALE_MAIN_GAP component=$component"; exit 71; }
+            git push origin HEAD:main
+            git fetch origin main --depth=1
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+            echo "READ_BACK_PASS component=$component sha=$(git rev-parse HEAD)"
+          done < "$RUNNER_TEMP/pending39.txt"
