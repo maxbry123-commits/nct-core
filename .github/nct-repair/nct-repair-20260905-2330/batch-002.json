@@ -1,0 +1,71 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/@swc-core-darwin-arm64-npm-1.12.5-b4619b572c-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/@swc-core-darwin-arm64-npm-1.12.5-b4619b572c-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "c29070d18c49e30cecfc18f250a24492850a240e",
+      "bytes": 14532795,
+      "status": "PREPARED",
+      "sha256": "4b404c727de0ef1ea2ee0dc7eab7e7de456619cea51f1045d428651843688154"
+    },
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/@swc-core-win32-x64-msvc-npm-1.12.5-2ae2df89d8-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/@swc-core-win32-x64-msvc-npm-1.12.5-2ae2df89d8-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "2fd0a0bb31a723051ffb6969292a21aebe0a7cff",
+      "bytes": 16579576,
+      "status": "PREPARED",
+      "sha256": "1b04411c6d16135b1ae6a2f98837afd4a8951103250646ca8671e4ac4e40d349"
+    },
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/next-npm-15.2.0-01b061642a-cc979f7184.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/next-npm-15.2.0-01b061642a-cc979f7184.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "57841692dca359d9db53927d378e60fc244593a3",
+      "bytes": 28893024,
+      "status": "PREPARED",
+      "sha256": "21b1d38235734c83cfeeb157b1f171d6999f359b58d6040279bddbed5a878ea1"
+    },
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/three-npm-0.137.0-d5eaf0d808-c3d005a738.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/three-npm-0.137.0-d5eaf0d808-c3d005a738.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "20f84c98a0f13d1e416eb23927ffed893cf9d3fa",
+      "bytes": 9845323,
+      "status": "PREPARED",
+      "sha256": "49cc8f3f6675f333f34177ab05404e2a1c185de3905f1088ffe54ad6ad92d0f3"
+    },
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/turbo-darwin-arm64-npm-1.13.4-09c1bd8e08-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/turbo-darwin-arm64-npm-1.13.4-09c1bd8e08-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "eebdb48fc0d01a7d16a1d93faeb97c14209b1a67",
+      "bytes": 8632883,
+      "status": "PREPARED",
+      "sha256": "611ebdb2ed3cf0b1b4a5339ea4b14ace27b5a7155d38ed139df0ffed354f7a65"
+    }
+  ]
+}
