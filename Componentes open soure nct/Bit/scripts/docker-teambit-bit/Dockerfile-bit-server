@@ -1,0 +1,6 @@
+ARG BASE_IMAGE=latest
+FROM bitcli/bit:${BASE_IMAGE}
+ARG SCOPE_PATH=/root/remote-scope
+WORKDIR ${SCOPE_PATH}
+RUN bit init --bare
+CMD bit start

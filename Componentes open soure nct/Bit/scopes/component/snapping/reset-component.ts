@@ -1,0 +1,172 @@
+import { compact } from 'lodash';
+import { BitError } from '@teambit/bit-error';
+import type { ComponentID } from '@teambit/component-id';
+import type { Consumer } from '@teambit/legacy.consumer';
+import { ComponentsList } from '@teambit/legacy.component-list';
+import { logger } from '@teambit/legacy.logger';
+import type { Lane, ModelComponent } from '@teambit/objects';
+import type { RemoveMain } from '@teambit/remove';
+import { DependencyGraph } from '@teambit/legacy.dependency-graph';
+import type { Workspace } from '@teambit/workspace';
+
+export type ResetResult = {
+  id: ComponentID;
+  versions: string[];
+  component?: ModelComponent;
+  /**
+   * relevant when the component was detached head so the head didn't change.
+   * we want .bitmap to have the version before the detachment. not as the head.
+   */
+  versionToSetInBitmap?: string;
+  /** batchIds from the version objects being removed, used to clean up lane history entries */
+  batchIds?: string[];
+};
+
+/**
+ * If head is false, remove all local versions.
+ */
+export async function removeLocalVersion(
+  consumer: Consumer,
+  id: ComponentID,
+  lane?: Lane,
+  head?: boolean,
+  force = false
+): Promise<ResetResult> {
+  const component: ModelComponent = await consumer.scope.getModelComponent(id);
+  const idStr = id.toString();
+  const fromBitmap = consumer.bitMap.getComponentIdIfExist(id);
+  // populate lane-aware heads so `getLocalHashes` diverges against the LANE remote head, not
+  // the empty main one — otherwise a hidden cascade entry (no bitmap row, no main-side state)
+  // would treat the entire local history as "local" and wipe the seeded base on reset.
+  if (lane) await component.populateLocalAndRemoteHeads(consumer.scope.objects, lane);
+  // Pass `lane` so the lean-lane filter only keeps lane-origin snaps in localVersions. Without
+  // it, a merged-in main tag (e.g. 0.0.2) would be wiped from the component's versions map
+  // even though it still lives on the component's home scope — silent data loss for the user.
+  const localVersions = await component.getLocalHashes(consumer.scope.objects, fromBitmap, lane);
+  if (!localVersions.length) throw new BitError(`unable to untag ${idStr}, the component is not staged`);
+  const headRef = component.getHeadRegardlessOfLane();
+  if (!headRef) {
+    throw new Error(`unable to reset ${idStr}, it has not head`);
+  }
+  if (head && !localVersions.find((v) => v.isEqual(headRef))) {
+    throw new Error(`unable to reset ${idStr}, the head ${headRef.toString()} is exported`);
+  }
+  const versionsToRemove = head ? [headRef] : localVersions;
+  const versionsToRemoveStr = component.switchHashesWithTagsIfExist(versionsToRemove);
+
+  if (!force) {
+    const dependencyGraph = await DependencyGraph.loadAllVersions(consumer.scope);
+
+    versionsToRemoveStr.forEach((versionToRemove) => {
+      const idWithVersion = component.toComponentId().changeVersion(versionToRemove);
+      const dependents = dependencyGraph.getImmediateDependentsPerId(idWithVersion);
+      if (dependents.length) {
+        throw new BitError(
+          `unable to reset ${idStr}, the version ${versionToRemove} has the following dependent(s) ${dependents.join(
+            ', '
+          )}`
+        );
+      }
+    });
+  }
+
+  // Load version objects to extract batchIds before they are removed.
+  // These batchIds are used to clean up the corresponding lane history entries.
+  // Only needed on lanes — on main there's no lane history to clean up.
+  let batchIds: string[] | undefined;
+  if (lane) {
+    const versionObjects = await Promise.all(
+      versionsToRemoveStr.map((ver) => component.loadVersion(ver, consumer.scope.objects, false))
+    );
+    const loadedVersions = compact(versionObjects);
+    batchIds = [...new Set(compact(loadedVersions.map((v) => v.batchId)))];
+  }
+
+  const headBefore = component.getHead();
+  await consumer.scope.sources.removeComponentVersions(component, versionsToRemove, versionsToRemoveStr, lane, head);
+  const headAfter = component.getHead();
+  let versionToSetInBitmap;
+  if (headBefore && headAfter && headBefore.isEqual(headAfter) && !lane) {
+    // if it's on main and the head didn't change, it means that it was in a detached-head state.
+    const divergeData = component.getDivergeData();
+    const snapBeforeDetached = divergeData.commonSnapBeforeDiverge;
+    if (snapBeforeDetached) versionToSetInBitmap = component.getTagOfRefIfExists(snapBeforeDetached);
+  }
+
+  return { id, versions: versionsToRemoveStr, component, versionToSetInBitmap, batchIds };
+}
+
+export async function removeLocalVersionsForAllComponents(
+  workspace: Workspace,
+  remove: RemoveMain,
+  lane?: Lane,
+  head?: boolean
+): Promise<ResetResult[]> {
+  const componentsToUntag = await getComponentsWithOptionToUntag(workspace, remove);
+  const force = true; // when removing local versions from all components, no need to check if the component is used as a dependency
+  return removeLocalVersionsForMultipleComponents(workspace.consumer, componentsToUntag, lane, head, force);
+}
+
+export async function removeLocalVersionsForMultipleComponents(
+  consumer: Consumer,
+  componentsToUntag: ModelComponent[],
+  lane?: Lane,
+  head?: boolean,
+  force?: boolean
+) {
+  if (!componentsToUntag.length) {
+    throw new BitError(`no components found to reset on your workspace`);
+  }
+  // if only head is removed, there is risk of deleting dependencies version without their dependents.
+  if (!force && head) {
+    const dependencyGraph = await DependencyGraph.loadAllVersions(consumer.scope);
+    const candidateComponentsIds = componentsToUntag.map((component) => {
+      const bitId = component.toComponentId();
+      const headRef = component.getHeadRegardlessOfLane();
+      if (!headRef)
+        throw new Error(`component ${bitId.toString()} does not have head. it should not be a candidate for reset`);
+
+      return bitId.changeVersion(component.getTagOfRefIfExists(headRef) || headRef.toString());
+    });
+    const candidateComponentsIdsStr = candidateComponentsIds.map((id) => id.toString());
+    candidateComponentsIds.forEach((bitId: ComponentID) => {
+      const dependents = dependencyGraph.getImmediateDependentsPerId(bitId);
+      // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
+      const dependentsNotCandidates = dependents.filter((dependent) => !candidateComponentsIdsStr.includes(dependent));
+      if (dependentsNotCandidates.length) {
+        throw new BitError( // $FlowFixMe
+          `unable to untag ${bitId}, the version ${bitId.version} has the following dependent(s) ${dependents.join(
+            ', '
+          )}`
+        );
+      }
+    });
+  }
+  logger.debug(`found ${componentsToUntag.length} components to untag`);
+  return Promise.all(
+    componentsToUntag.map((component) => removeLocalVersion(consumer, component.toComponentId(), lane, head, force))
+  );
+}
+
+export async function getComponentsWithOptionToUntag(
+  workspace: Workspace,
+  remove: RemoveMain
+): Promise<ModelComponent[]> {
+  const componentList = new ComponentsList(workspace);
+  const laneObj = await workspace.getCurrentLaneObject();
+  // The result includes hidden updateDependents — `bit reset` reverts cascade snaps end-to-end.
+  // The bitmap-update step in `snapping.reset` skips hidden entries explicitly so we don't try
+  // to write workspace state for components that don't live in the workspace.
+  const components: ModelComponent[] = await componentList.listExportPendingComponents(laneObj);
+  const removedStagedIds = await remove.getRemovedStaged();
+  if (!removedStagedIds.length) return components;
+  const removedStagedBitIds = removedStagedIds.map((id) => id);
+  const nonExistsInStaged = removedStagedBitIds.filter(
+    (id) => !components.find((c) => c.toComponentId().isEqualWithoutVersion(id))
+  );
+  if (!nonExistsInStaged.length) return components;
+  const modelComps = await Promise.all(nonExistsInStaged.map((id) => workspace.consumer.scope.getModelComponent(id)));
+  components.push(...modelComps);
+
+  return components;
+}

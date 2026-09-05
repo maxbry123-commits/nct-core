@@ -1,0 +1,96 @@
+import c from 'chalk';
+import semver from 'semver';
+import Table from 'cli-table';
+import type { ListScopeResult } from './lister.main.runtime';
+
+type Row = { id: string; localVersion: string; currentVersion: string; remoteVersion?: string; path?: string };
+
+export function listTemplate(listScopeResults: ListScopeResult[], json: boolean, showRemoteVersion: boolean) {
+  function tabulateComponent(listScopeResult: ListScopeResult): Row {
+    const id = listScopeResult.id.toStringWithoutVersion();
+    let version = listScopeResult.id.hasVersion() ? (listScopeResult.id.version as string) : '<new>';
+    if (!json && showRemoteVersion) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const color = listScopeResult.remoteVersion && semver.gt(listScopeResult.remoteVersion, version!) ? 'red' : null;
+      version = color ? c[color](version) : version;
+    }
+    const getFormattedId = () => {
+      const { deprecated, laneReadmeOf, removed } = listScopeResult;
+      let formattedId = c.white(`${id}`);
+      if (deprecated) {
+        formattedId = c.yellow(`${formattedId} [Deprecated]`);
+      }
+      if (removed) {
+        formattedId = c.red(`${formattedId} [Deleted]`);
+      }
+      if (laneReadmeOf && laneReadmeOf.length > 0) {
+        formattedId = `${formattedId}\n`;
+        laneReadmeOf.forEach((laneName) => {
+          formattedId = `${formattedId}${c.yellow(`[Lane Readme]: ${laneName}\n`)}`;
+        });
+      }
+      return formattedId;
+    };
+
+    const data: Row = {
+      id: getFormattedId(),
+      localVersion: version,
+      currentVersion: listScopeResult.currentlyUsedVersion || 'N/A',
+    };
+
+    if (showRemoteVersion) {
+      let remoteVersion = listScopeResult.remoteVersion || 'N/A';
+      const color =
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        listScopeResult.remoteVersion && semver.gt(listScopeResult.id.version!, listScopeResult.remoteVersion)
+          ? 'red'
+          : null;
+      remoteVersion = color ? c[color](remoteVersion) : remoteVersion;
+      data.remoteVersion = remoteVersion;
+    }
+    if (listScopeResult.rootDir) {
+      data.path = listScopeResult.rootDir;
+    }
+    return data;
+  }
+
+  function toJsonComponent(listScopeResult: ListScopeResult): Record<string, any> {
+    const id = listScopeResult.id.toStringWithoutVersion();
+    const localVersion = listScopeResult.id.hasVersion() ? (listScopeResult.id.version as string) : '<new>';
+    const data: Record<string, any> = {
+      id,
+      localVersion,
+      deprecated: listScopeResult.deprecated,
+      currentVersion: listScopeResult.currentlyUsedVersion || 'N/A',
+      remoteVersion: listScopeResult.remoteVersion || 'N/A',
+      removed: listScopeResult.removed,
+    };
+    if (listScopeResult.rootDir) {
+      data.rootDir = listScopeResult.rootDir;
+    }
+    return data;
+  }
+
+  if (json) {
+    return listScopeResults.map(toJsonComponent);
+  }
+  const hasPath = listScopeResults.some((r) => r.rootDir);
+  const rows = listScopeResults.map((r) => {
+    const row = tabulateComponent(r);
+    if (hasPath && !row.path) {
+      row.path = '';
+    }
+    return row;
+  });
+  const head = ['component ID', 'latest in scope', 'used in workspace'];
+  if (showRemoteVersion) {
+    head.push('latest in remote scope');
+  }
+  if (hasPath) {
+    head.push('path');
+  }
+
+  const table = new Table({ head, style: { head: ['cyan'] } });
+  rows.map((row) => table.push(Object.values(row)));
+  return table.toString();
+}

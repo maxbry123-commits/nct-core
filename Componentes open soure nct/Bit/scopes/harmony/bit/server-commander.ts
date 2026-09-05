@@ -1,0 +1,563 @@
+/**
+ * This file is responsible for interacting with bit through a long-running background process "bit-server" rather than directly.
+ * Why not directly?
+ * 1. startup cost. currently it takes around 1 second to bootstrap bit.
+ * 2. an experimental package-manager saves node_modules in-memory. if a client starts a new process, it won't have the node_modules in-memory.
+ *
+ * In this file, there are three ways to achieve this. It's outlined in the order it was evolved.
+ * The big challenge here is to show the output correctly to the client even though the server is running in a different process.
+ *
+ * 1. process.env.BIT_CLI_SERVER === 'true'
+ * This method uses SSE - Server Send Events. The server sends events to the client with the output to print. The client listens to
+ * these events and prints them. It's cumbersome. For this, the logger was changed and every time the logger needs to print to the console,
+ * it was using this SSE to send events. Same with the loader.
+ * Cons: Other output, such as pnpm, needs an extra effort to print - for pnpm, the "process" object was passed to pnpm
+ * and its stdout was modified to use the SSE.
+ * However, other tools that print directly to the console, such as Jest, won't work.
+ *
+ * 2. process.env.BIT_CLI_SERVER_TTY === 'true'
+ * Because the terminal - tty is a fd (file descriptor) on mac/linux, it can be passed to the server. The server can write to this
+ * fd and it will be printed to the client terminal. On the server, the process.stdout.write was monkey-patched to
+ * write to the tty. (see cli-raw.route.ts file).
+ * It solves the problem of Jest and other tools that print directly to the console.
+ * Cons:
+ * A. It doesn't work on Windows. Windows doesn't treat tty as a file descriptor.
+ * B. We need two ways communication. Commands such as "bit update", display a prompt with option to select using the arrow keys.
+ *    This is not possible with the tty approach. Also, if the client hits Ctrl+C, the server won't know about it and it
+ *    won't kill the process.
+ *
+ * 3. process.env.BIT_CLI_SERVER_PTY === 'true'
+ * This is the most advanced approach. It spawns a pty (pseudo terminal) process to communicate between the client and the server.
+ * The client connects to the server using a socket. The server writes to the socket and the client reads from it.
+ * The client also writes to the socket and the server reads from it. See server-forever.ts to understand better.
+ * In order to pass terminal sequences, such as arrow keys or Ctrl+C, the stdin of the client is set to raw mode.
+ * In theory, this approach could work by spawning a normal process, not pty, however, then, the stdin/stdout are non-tty,
+ * and as a result, loaders such as Ora and chalk won't work.
+ * With this new approach, we also support terminating and reloading the server. A new command is added
+ * "bit server-forever", which spawns the pty-process. If the client hits Ctrl+C, this server-forever process will kill
+ * the pty-process and re-load it.
+ * Keep in mind, that to send the command and get the results, we still using http. The usage of the pty is only for
+ * the input/output during the command.
+ * I was trying to avoid the http, and use only the pty, by implementing readline to get the command from the socket,
+ * but then I wasn't able to return the prompt to the user easily. So, I decided to keep the http for the request/response part.
+ */
+
+import fetch from 'node-fetch';
+import net from 'net';
+import fs from 'fs-extra';
+import { exec, execSync } from 'child_process';
+import { join } from 'path';
+import os from 'os';
+import EventSource from 'eventsource';
+import { findScopePath } from '@teambit/scope.modules.find-scope-path';
+import chalk from 'chalk';
+import { loader } from '@teambit/legacy.loader';
+import { printBitVersionIfAsked } from './bootstrap';
+import { getPidByPort, getSocketPort } from './server-forever';
+
+const CMD_SERVER_PORT = 'cli-server-port';
+const CMD_SERVER_PORT_DELETE = 'cli-server-port-delete';
+const CMD_SERVER_SOCKET_PORT = 'cli-server-socket-port';
+const CMD_SERVER_TOKEN = 'cli-server-token';
+const SKIP_PORT_VALIDATION_ARG = '--skip-port-validation';
+
+class ServerPortFileNotFound extends Error {
+  constructor(filePath: string) {
+    super(`server port file not found at ${filePath}`);
+  }
+}
+class ServerPortFileInvalid extends Error {
+  constructor(filePath: string, content: string) {
+    super(`server port file at ${filePath} does not contain a valid port: "${content}"`);
+  }
+}
+class ServerIsNotRunning extends Error {
+  constructor(port: number) {
+    super(`bit server is not running on port ${port}`);
+  }
+}
+class ScopeNotFound extends Error {
+  constructor(scopePath: string) {
+    super(`scope not found at ${scopePath}`);
+  }
+}
+
+type CommandResult = { data: any; exitCode: number };
+
+export class ServerCommander {
+  async execute() {
+    try {
+      const results = await this.runCommandWithHttpServer();
+      if (results) {
+        const { data, exitCode } = results;
+        loader.off();
+        const dataToPrint = typeof data === 'string' ? data : JSON.stringify(data, undefined, 2);
+        // eslint-disable-next-line no-console
+        console.log(dataToPrint);
+        process.exit(exitCode);
+      }
+
+      process.exit(0);
+    } catch (err: any) {
+      if (
+        err instanceof ScopeNotFound ||
+        err instanceof ServerPortFileNotFound ||
+        err instanceof ServerPortFileInvalid ||
+        err instanceof ServerIsNotRunning
+      ) {
+        throw err;
+      }
+      loader.off();
+      // eslint-disable-next-line no-console
+      console.error(chalk.red(err.message));
+      process.exit(1);
+    }
+  }
+
+  private shouldUseTTYPath() {
+    if (process.platform === 'win32') return false; // windows doesn't support tty path
+    return process.env.BIT_CLI_SERVER_TTY === 'true';
+  }
+
+  async runCommandWithHttpServer(): Promise<CommandResult | undefined | void> {
+    if (process.argv.includes(CMD_SERVER_PORT)) return this.printPortAndExit();
+    if (process.argv.includes(CMD_SERVER_SOCKET_PORT)) return this.printSocketPortAndExit();
+    if (process.argv.includes(CMD_SERVER_PORT_DELETE)) return this.deletePortAndExit();
+    if (process.argv.includes(CMD_SERVER_TOKEN)) return this.printServerTokenAndExit();
+    printBitVersionIfAsked();
+    // deliberately not validating the port here (see getExistingUsedPort): that costs two `lsof`
+    // subprocesses, ~320ms on every single command, to establish something the request itself
+    // already proves. Each server writes its token into its own scope dir, so a port file left
+    // behind pointing at another workspace's server gets a 401, and a dead port gets ECONNREFUSED
+    // — both handled below by dropping the stale file and falling back to running in-process.
+    const port = await this.getExistingPort();
+    const url = `http://${resolveDialHost()}:${port}/api`;
+    const shouldUsePTY = process.env.BIT_CLI_SERVER_PTY === 'true';
+
+    if (shouldUsePTY) {
+      await this.connectToSocket();
+    }
+    const ttyPath = this.shouldUseTTYPath()
+      ? execSync('tty', {
+          encoding: 'utf8',
+          stdio: ['inherit', 'pipe', 'pipe'],
+        }).trim()
+      : undefined;
+    if (!ttyPath && !shouldUsePTY) this.initSSE(url);
+    // parse the args and options from the command
+    const args = process.argv.slice(2);
+    if (!args.includes('--json') && !args.includes('-j')) {
+      loader.on();
+    }
+    const endpoint = `cli-raw`;
+    const pwd = process.cwd();
+    const body = { command: args, pwd, envBitFeatures: process.env.BIT_FEATURES, ttyPath, isPty: shouldUsePTY };
+    const post = async (authToken?: string) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
+      try {
+        return await fetch(`${url}/${endpoint}`, {
+          method: 'post',
+          body: JSON.stringify(body),
+          headers,
+        });
+      } catch (err: any) {
+        if (err.code === 'ECONNREFUSED') {
+          await this.deleteServerPortFile();
+          throw new ServerIsNotRunning(port);
+        }
+        throw new Error(`failed to run command "${args.join(' ')}" on the server. ${err.message}`);
+      }
+    };
+
+    const token = this.getServerTokenIfExists();
+    let res = await post(token);
+
+    // a 401 has two possible causes, and they need opposite handling: either the port file points
+    // at a different workspace's server (stale, and dealt with below), or our own server restarted
+    // and rotated its token after we read it. The server writes the token file before it registers
+    // any route, so a server able to answer us has already published its current token — if what's
+    // on disk no longer matches what we sent, this is the restart case and retrying is enough.
+    // Without this, an unlucky command spanning a restart would delete the port file of a server
+    // that is alive and healthy, hiding it from every later client.
+    if (res.status === 401) {
+      const currentToken = this.getServerTokenIfExists();
+      if (currentToken && currentToken !== token) res = await post(currentToken);
+    }
+
+    if (res.ok) {
+      const results = await res.json();
+      // bit-server always answers this route with a { data, exitCode } object. Anything else means
+      // the port file points at some other listener that happened to accept the POST, so fail safe
+      // rather than reporting a foreign response as the command's result: drop the port file and
+      // let the command run in-process.
+      if (!results || typeof results !== 'object') {
+        await this.deleteServerPortFile();
+        throw new ServerIsNotRunning(port);
+      }
+      return results;
+    }
+
+    // 401 (still, after the retry above): the server on this port belongs to a different workspace,
+    // so it doesn't recognize our token. 404: whatever is listening there is not a bit server.
+    // Either way the port file is stale — drop it and let the caller fall back to in-process.
+    if (res.status === 401 || res.status === 404) {
+      await this.deleteServerPortFile();
+      throw new ServerIsNotRunning(port);
+    }
+
+    let jsonResponse;
+    try {
+      jsonResponse = await res.json();
+    } catch {
+      // the response is not json, ignore the body.
+    }
+    throw new Error(jsonResponse?.message || jsonResponse || res.statusText);
+  }
+
+  private async connectToSocket() {
+    return new Promise<void>((resolve, reject) => {
+      const socketPort = getSocketPort();
+      const socket = net.createConnection({ port: socketPort });
+
+      const resetStdin = () => {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+      };
+
+      // Handle errors that occur before or after connection
+      socket.on('error', (err: any) => {
+        if (err.code === 'ECONNREFUSED') {
+          reject(
+            new Error(`Error: Unable to connect to the socket on port ${socketPort}.
+Please run the command "bit server-forever" first to start the server.`)
+          );
+        }
+        resetStdin();
+        socket.destroy(); // Ensure the socket is fully closed
+        reject(err);
+      });
+
+      // Handle successful connection
+      socket.on('connect', () => {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+
+        // Forward stdin to the socket
+        process.stdin.on('data', (data: any) => {
+          socket.write(data);
+
+          // Detect Ctrl+C (hex code '03')
+          if (data.toString('hex') === '03') {
+            // Important to write it to the socket so the server knows to kill the PTY process
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+            socket.end();
+            process.exit();
+          }
+        });
+
+        // Forward data from the socket to stdout
+        socket.on('data', (data: any) => {
+          process.stdout.write(data);
+        });
+
+        // Handle socket close and end events
+        const cleanup = () => {
+          resetStdin();
+          socket.destroy();
+        };
+
+        socket.on('close', cleanup);
+        socket.on('end', cleanup);
+
+        resolve(); // Connection successful, resolve the Promise
+      });
+    });
+  }
+
+  /**
+   * Initialize the server-sent events (SSE) connection to the server.
+   * This is used to print the logs and show the loader during the command.
+   * Without this, it only shows the response from http server, but not the "logger.console" or "logger.setStatusLine" texts.
+   *
+   * I wasn't able to find a better way to do it. The challenge here is that the http server is running in a different
+   * process, which is not connected to the current process in any way. (unlike the IDE which is its child process and
+   * can access its stdout).
+   * One of the attempts I made is sending the "tty" path to the server and let the server console log to that path, but
+   * it didn't work well. It was printed only after the response came back from the server.
+   */
+  private initSSE(url: string) {
+    const token = this.getServerTokenIfExists();
+    const eventSourceOpts = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+    const eventSource = new EventSource(`${url}/sse-events`, eventSourceOpts);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    eventSource.onerror = (_error: any) => {
+      // eslint-disable-next-line no-console
+      // console.error('Error occurred in SSE connection:', _error);
+      // probably was unable to connect to the server and will throw ServerNotFound right after. no need to show this error.
+      eventSource.close();
+    };
+    eventSource.addEventListener('onLoader', (event: any) => {
+      const parsed = JSON.parse(event.data);
+      const { method, args } = parsed;
+      loader[method](...(args || []));
+    });
+    eventSource.addEventListener('onLogWritten', (event: any) => {
+      const parsed = JSON.parse(event.data);
+      process.stdout.write(parsed.message);
+    });
+  }
+
+  private async printPortAndExit() {
+    try {
+      const port = await this.getExistingUsedPort();
+      process.stdout.write(port.toString());
+      process.exit(0);
+    } catch (err: any) {
+      if (
+        err instanceof ScopeNotFound ||
+        err instanceof ServerPortFileNotFound ||
+        err instanceof ServerPortFileInvalid ||
+        err instanceof ServerIsNotRunning
+      ) {
+        process.exit(0);
+      }
+      console.error(err.message); // eslint-disable-line no-console
+      process.exit(1);
+    }
+  }
+  private async deletePortAndExit() {
+    try {
+      await this.deleteServerPortFile();
+      process.exit(0);
+    } catch {
+      // probably file doesn't exist.
+      process.exit(0);
+    }
+  }
+
+  private printSocketPortAndExit() {
+    try {
+      const port = getSocketPort();
+      process.stdout.write(port.toString());
+      process.exit(0);
+    } catch (err: any) {
+      console.error(err.message); // eslint-disable-line no-console
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Print the per-server bearer token written by bit-server at startup, used
+   * by clients (e.g. the bit-vscode extension) to authenticate to the local
+   * HTTP API. Prints empty if no token file exists (older bit-server with no
+   * auth requirement).
+   */
+  private async printServerTokenAndExit() {
+    try {
+      const filePath = this.getServerTokenFilePath();
+      try {
+        const token = await fs.readFile(filePath, 'utf8');
+        process.stdout.write(token.trim());
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+        // No token file — old bit-server, no auth required. Print empty.
+      }
+      process.exit(0);
+    } catch (err: any) {
+      if (err instanceof ScopeNotFound) {
+        process.exit(0);
+      }
+      console.error(err.message); // eslint-disable-line no-console
+      process.exit(1);
+    }
+  }
+
+  private getServerTokenFilePath() {
+    const scopePath = findScopePath(process.cwd());
+    if (!scopePath) {
+      throw new ScopeNotFound(process.cwd());
+    }
+    return join(scopePath, 'server-token.txt');
+  }
+
+  /**
+   * Read the server's bearer token, returning undefined if no token file
+   * exists (older bit-server with no auth requirement) or scope can't be
+   * resolved. Used by HTTP/SSE callers in this file to authenticate to the
+   * running bit-server.
+   *
+   * Only ENOENT and ScopeNotFound are swallowed — other read errors
+   * (EACCES, EPERM, corrupted file, …) are surfaced so the user sees the
+   * real cause instead of a misleading 401/upgrade message from the server.
+   */
+  private getServerTokenIfExists(): string | undefined {
+    let filePath: string;
+    try {
+      filePath = this.getServerTokenFilePath();
+    } catch (err: any) {
+      if (err instanceof ScopeNotFound) return undefined;
+      throw err;
+    }
+    try {
+      const token = fs.readFileSync(filePath, 'utf8').trim();
+      return token || undefined;
+    } catch (err: any) {
+      if (err.code === 'ENOENT') return undefined;
+      throw err;
+    }
+  }
+
+  /**
+   * the port from the port file, proven to be served by a process whose cwd is this workspace.
+   *
+   * Only the `cli-server-port` command uses this. Its whole job is to answer "is there a usable
+   * server?" for external clients such as the VS Code extension, which expect no output when there
+   * isn't one — so it's worth two `lsof` subprocesses there. Running an actual command doesn't pay
+   * that: see the note in runCommandWithHttpServer.
+   */
+  private async getExistingUsedPort(): Promise<number> {
+    const port = await this.getExistingPort();
+    const shouldSkipPortValidation = process.argv.includes(SKIP_PORT_VALIDATION_ARG);
+    const isPortInUse = shouldSkipPortValidation ? true : await this.isPortInUseForCurrentDir(port);
+    if (!isPortInUse) {
+      await this.deleteServerPortFile();
+      throw new ServerIsNotRunning(port);
+    }
+
+    return port;
+  }
+
+  private async isPortInUseForCurrentDir(port: number) {
+    const pid = getPidByPort(port);
+    if (!pid) {
+      return false;
+    }
+    const dirUsedByPort = await getCwdByPid(pid);
+    if (!dirUsedByPort) {
+      // might not be supported by Windows. this is on-best-effort basis.
+      return true;
+    }
+    const currentDir = process.cwd();
+    return dirUsedByPort === currentDir;
+  }
+
+  private async getExistingPort(): Promise<number> {
+    const filePath = this.getServerPortFilePath();
+    let fileContent: string;
+    try {
+      fileContent = await fs.readFile(filePath, 'utf8');
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        throw new ServerPortFileNotFound(filePath);
+      }
+      throw err;
+    }
+    const port = parseInt(fileContent.trim(), 10);
+    // the server writes this file with a plain overwrite, so a reader can catch it empty or
+    // half-written. Left unchecked that becomes NaN (or a truncated number) and surfaces as an
+    // opaque fetch failure, which exits instead of falling back in-process. Deliberately not
+    // deleting the file: a torn read means the server is mid-write, and the next command will see
+    // the complete value.
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new ServerPortFileInvalid(filePath, fileContent.trim());
+    }
+    return port;
+  }
+
+  private async deleteServerPortFile() {
+    const filePath = this.getServerPortFilePath();
+    await fs.remove(filePath);
+  }
+
+  private getServerPortFilePath() {
+    const scopePath = findScopePath(process.cwd());
+    if (!scopePath) {
+      throw new ScopeNotFound(process.cwd());
+    }
+    return join(scopePath, 'server-port.txt');
+  }
+}
+
+export function shouldUseBitServer() {
+  const commandsToSkip = ['start', 'run', 'watch', 'server'];
+  const hasFlag =
+    process.env.BIT_CLI_SERVER === 'true' ||
+    process.env.BIT_CLI_SERVER === '1' ||
+    process.env.BIT_CLI_SERVER_PTY === 'true' ||
+    process.env.BIT_CLI_SERVER_TTY === 'true';
+  return (
+    hasFlag &&
+    process.argv.length > 2 && // if it has no args, it shows the help
+    !commandsToSkip.includes(process.argv[2])
+  );
+}
+
+/**
+ * Address the CLI uses to dial the local bit-server. Mirrors the api-server's
+ * bind host (`BIT_SERVER_HOST`) so the same env var works for both sides in
+ * hosted environments. Two host values need translating: `0.0.0.0` / `::`
+ * are bind-only wildcards — not valid as destinations — so dial loopback
+ * instead. Raw IPv6 addresses get bracketed for URL safety.
+ */
+function resolveDialHost(): string {
+  const override = process.env.BIT_SERVER_HOST?.trim();
+  if (!override) return '127.0.0.1';
+  if (override === '0.0.0.0') return '127.0.0.1';
+  if (override === '::') return '[::1]';
+  // Bracket any literal IPv6 (contains ':' but isn't an IPv4 with port —
+  // detected by 2+ colons).
+  if (override.includes(':') && override.split(':').length > 2 && !override.startsWith('[')) {
+    return `[${override}]`;
+  }
+  return override;
+}
+
+/**
+ * Executes a command and returns stdout as a string.
+ */
+function execCommand(cmd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { encoding: 'utf-8' }, (error, stdout) => {
+      if (error) {
+        return reject(error);
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
+
+/**
+ * Get the CWD of a process by PID.
+ *
+ * On Linux: readlink /proc/<pid>/cwd
+ * On macOS: lsof -p <pid> and parse line with 'cwd'
+ * On Windows: forget about it. tried with wmic, didn't went well.
+ */
+async function getCwdByPid(pid: string): Promise<string | null> {
+  const platform = os.platform();
+
+  try {
+    if (platform === 'linux') {
+      const cwd = await execCommand(`readlink /proc/${pid}/cwd`);
+      return cwd || null;
+    } else if (platform === 'darwin') {
+      // macOS does not have /proc, but lsof -p <pid> shows cwd line like:
+      // COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF   NODE NAME
+      // node    12345 user  cwd    DIR    1,2      1024  56789 /Users/username/project
+      const output = await execCommand(`lsof -p ${pid}`);
+      const line = output.split('\n').find((l) => l.includes(' cwd '));
+      if (!line) return null;
+      const parts = line.trim().split(/\s+/);
+      // The last part should be the directory path
+      return parts[parts.length - 1] || null;
+    } else if (platform === 'win32') {
+      return null;
+    } else {
+      throw new Error(`Platform ${platform} not supported`);
+    }
+  } catch {
+    return null;
+  }
+}

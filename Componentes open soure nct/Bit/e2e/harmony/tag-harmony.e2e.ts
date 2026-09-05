@@ -1,0 +1,810 @@
+import chai, { expect } from 'chai';
+import chalk from 'chalk';
+import path from 'path';
+import chaiFs from 'chai-fs';
+import lodash from 'lodash';
+import { Extensions } from '@teambit/legacy.constants';
+import { SchemaName } from '@teambit/legacy.consumer-component';
+import { Helper } from '@teambit/legacy.e2e-helper';
+
+const { uniq } = lodash;
+
+chai.use(chaiFs);
+
+describe('tag components on Harmony', function () {
+  this.timeout(0);
+  let helper: Helper;
+  before(() => {
+    helper = new Helper();
+  });
+  after(() => {
+    helper.scopeHelper.destroy();
+  });
+  describe('workspace with standard components', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents();
+      helper.command.tagAllComponents();
+      helper.command.export();
+      helper.scopeHelper.reInitWorkspace();
+      helper.scopeHelper.addRemoteScope();
+      helper.command.importComponent('*');
+    });
+    it('should import successfully with the schema prop', () => {
+      const comp1 = helper.command.catComponent(`${helper.scopes.remote}/comp1@latest`);
+      expect(comp1).to.have.property('schema');
+      expect(comp1.schema).to.equal(SchemaName.Harmony2);
+    });
+    it('bit status should work and not show modified', () => {
+      const status = helper.command.statusJson();
+      expect(status.modifiedComponents).to.be.empty;
+    });
+    describe('tag without build after full tag', () => {
+      before(() => {
+        helper.command.tagAllWithoutBuild('--ver 1.0.0 --unmodified');
+      });
+      it('should not save the builder data from the previous version', () => {
+        const comp = helper.command.catComponent(`${helper.scopes.remote}/comp1@latest`);
+        const builder = helper.general.getExtension(comp, Extensions.builder);
+        expect(builder.data).to.not.have.property('pipeline');
+        expect(builder.data).to.not.have.property('artifacts');
+      });
+      it('should be able to export successfully', () => {
+        expect(() => helper.command.export()).to.not.throw();
+      });
+    });
+  });
+  describe('tag on Harmony', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents();
+      helper.command.tagAllComponents();
+      helper.command.export();
+      helper.command.tagIncludeUnmodified('0.0.2');
+    });
+    it('should not show the component as modified', () => {
+      const status = helper.command.statusJson();
+      expect(status.modifiedComponents).to.be.empty;
+    });
+    // this happens as a result of package.json in the node_modules for author point to the wrong
+    // version. currently, the version is removed.
+    it('should not show the dependency with an older version', () => {
+      const show = helper.command.showComponentParsed('comp1');
+      expect(show.dependencies[0].id).to.equal(`${helper.scopes.remote}/comp2@0.0.2`);
+    });
+    describe('auto-tag', () => {
+      before(() => {
+        helper.fs.appendFile('comp2/index.js');
+      });
+      it('should save the artifacts/dists to the auto-tagged components', () => {
+        const comp1 = helper.command.catComponent('comp1@latest');
+        const builderExt = comp1.extensions.find((e) => e.name === Extensions.builder);
+        expect(builderExt.data).to.have.property('artifacts');
+        const compilerArtifacts = builderExt.data.artifacts.find((a) => a.task.id === Extensions.compiler);
+        expect(compilerArtifacts.files.length).to.be.greaterThan(0);
+      });
+    });
+  });
+  describe('soft tag', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents();
+      helper.command.softTag();
+    });
+    it('should add a property of nextVersion in .bitmap file', () => {
+      const bitMap = helper.bitMap.readComponentsMapOnly();
+      const componentsMap: any = Object.values(bitMap);
+      componentsMap.forEach((componentMap) => {
+        expect(componentMap).to.have.property('nextVersion');
+        expect(componentMap.nextVersion.version).to.equal('patch');
+      });
+    });
+    it('bit status should show the new components as soft tagged', () => {
+      const status = helper.command.status();
+      expect(chalk.reset(status)).to.have.string('comp1 (soft-tagged)');
+    });
+    describe('tagging with --persist flag', () => {
+      before(() => {
+        helper.command.persistTag();
+      });
+      it('should tag and remove the nextVersion property in .bitmap file', () => {
+        const bitMap = helper.bitMap.readComponentsMapOnly();
+        const componentsMap = Object.values(bitMap);
+        componentsMap.forEach((componentMap) => {
+          expect(componentMap).to.not.have.property('nextVersion');
+        });
+        const ids = Object.keys(bitMap);
+        ids.forEach((id) => expect(bitMap[id].version).to.equal('0.0.1'));
+      });
+      it('bit status should not show as soft-tagged', () => {
+        const status = helper.command.status();
+        expect(chalk.reset(status)).to.not.have.string('soft-tagged');
+      });
+      describe('modify a component that has dependents and soft-tag it', () => {
+        before(() => {
+          helper.fs.appendFile('comp3/index.js');
+          helper.command.softTag('comp3');
+        });
+        it('should save the nextVersion data into potential auto-tag bitmap entries', () => {
+          const bitMap = helper.bitMap.readComponentsMapOnly();
+          expect(bitMap.comp2).to.have.property('nextVersion');
+          expect(bitMap.comp1).to.have.property('nextVersion');
+        });
+      });
+    });
+    describe('soft tag with specific version and message', () => {
+      before(() => {
+        helper.command.softTag('--ver 2.0.0 --unmodified -m "my custom message"');
+      });
+      it('should save the version and the message into the .bitmap file', () => {
+        const bitMap = helper.bitMap.readComponentsMapOnly();
+        const componentsMap: any[] = Object.values(bitMap);
+        componentsMap.forEach((componentMap) => {
+          expect(componentMap).to.have.property('nextVersion');
+          expect(componentMap.nextVersion.version).to.equal('2.0.0');
+          expect(componentMap.nextVersion.message).to.match(/bump dependencies versions|my custom message/);
+        });
+      });
+    });
+    describe('soft tag with specific version attached to a component-id', () => {
+      before(() => {
+        helper.scopeHelper.reInitWorkspace();
+        helper.fixtures.populateComponents(1);
+        helper.command.softTag('comp1@0.0.5');
+      });
+      it('should save the version into the .bitmap file', () => {
+        const bitMap = helper.bitMap.readComponentsMapOnly();
+        const componentMap = bitMap.comp1;
+        expect(componentMap).to.have.property('nextVersion');
+        expect(componentMap.nextVersion.version).to.equal('0.0.5');
+      });
+    });
+    describe('soft tag after soft tag', () => {
+      let tagOutput;
+      before(() => {
+        helper.command.softTag('--ver 2.0.0');
+        tagOutput = helper.command.softTag('--ver 3.0.0');
+      });
+      it('should show the output according to the new soft-tag', () => {
+        expect(tagOutput).to.have.string('3.0.0');
+        expect(tagOutput).to.not.have.string('2.0.0');
+      });
+      it('should save the version and the message into the .bitmap file', () => {
+        const bitMap = helper.bitMap.readComponentsMapOnly();
+        const componentsMap: any[] = Object.values(bitMap);
+        componentsMap.forEach((componentMap) => {
+          expect(componentMap.nextVersion.version).to.equal('3.0.0');
+        });
+      });
+    });
+    describe('untag', () => {
+      before(() => {
+        helper.command.softTag('--ver 3.0.0');
+        helper.command.resetSoft('--all');
+      });
+      it('should remove the nextVersion from the .bitmap file', () => {
+        const bitMap = helper.bitMap.readComponentsMapOnly();
+        const componentsMap: any[] = Object.values(bitMap);
+        componentsMap.forEach((componentMap) => {
+          expect(componentMap).to.not.have.property('nextVersion');
+        });
+      });
+    });
+  });
+  describe('tag scope', () => {
+    let beforeTagScope: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagWithoutBuild('comp3@0.0.3');
+      helper.command.tagWithoutBuild('comp2@0.0.2');
+      helper.command.tagWithoutBuild('comp1@0.0.1');
+      beforeTagScope = helper.scopeHelper.cloneWorkspace();
+    });
+    describe('without version', () => {
+      let output;
+      before(() => {
+        output = helper.command.tagIncludeUnmodifiedWithoutBuild();
+      });
+      it('should bump each component by patch', () => {
+        expect(output).to.have.string('comp1@0.0.2');
+        expect(output).to.have.string('comp2@0.0.3');
+        expect(output).to.have.string('comp3@0.0.4');
+      });
+    });
+    describe('without version and --minor flag', () => {
+      let output;
+      before(() => {
+        helper.scopeHelper.getClonedWorkspace(beforeTagScope);
+        output = helper.command.tagIncludeUnmodifiedWithoutBuild('', '--minor');
+      });
+      it('should bump each component by patch', () => {
+        expect(output).to.have.string('comp1@0.1.0');
+        expect(output).to.have.string('comp2@0.1.0');
+        expect(output).to.have.string('comp3@0.1.0');
+      });
+    });
+  });
+  describe('with failing tests', () => {
+    let beforeTagScope: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fs.outputFile('bar/index.js');
+      helper.fs.outputFile(
+        'bar/foo.spec.js',
+        `
+        describe('bar component', () => {
+          it('should fail', () => {
+            expect(true).toBe(false);
+          });
+        });
+      `
+      );
+      helper.command.addComponent('bar');
+      beforeTagScope = helper.scopeHelper.cloneWorkspace();
+    });
+    it('should fail without --skip-tests', () => {
+      const cmd = () => helper.command.tagAllComponents();
+      const error = new Error('Failed task 1: "teambit.defender/tester:JestTest" of env "teambit.harmony/node"');
+      helper.general.expectToThrow(cmd, error);
+      const stagedConfigPath = helper.general.getStagedConfigPath();
+      expect(stagedConfigPath).to.not.be.a.path();
+    });
+    it('should succeed with --skip-tests', () => {
+      helper.scopeHelper.getClonedWorkspace(beforeTagScope);
+      expect(() => helper.command.tagAllComponents('--skip-tests')).to.not.throw();
+    });
+    it('should succeed with --ignore-build-errors', () => {
+      helper.scopeHelper.getClonedWorkspace(beforeTagScope);
+      expect(() => helper.command.tagAllComponents('--ignore-build-errors')).to.not.throw();
+    });
+    it('should not throw with --build --loose when only test failures occur and set buildStatus to succeed', () => {
+      helper.scopeHelper.getClonedWorkspace(beforeTagScope);
+      helper.command.tagAllComponents('--build --loose');
+      const comp = helper.command.catComponent('bar@latest');
+      expect(comp.buildStatus).to.equal('succeed');
+    });
+  });
+  describe('modified one component, the rest are auto-tag pending', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents();
+      helper.command.tagAllWithoutBuild();
+      // modify only comp3. so then comp1 and comp2 are auto-tag pending
+      helper.fs.appendFile('comp3/index.js');
+    });
+    describe('tag with specific version', () => {
+      before(() => {
+        helper.command.tagAllWithoutBuild('--ver 1.0.0');
+      });
+      it('should set the specified version to the modified component and bumped by patch the auto-tagged', () => {
+        const bitMap = helper.bitMap.read();
+        expect(bitMap.comp3.version).to.equal('1.0.0');
+        expect(bitMap.comp1.version).to.equal('0.0.2');
+        expect(bitMap.comp2.version).to.equal('0.0.2');
+      });
+    });
+    describe('tag with --scope flag', () => {
+      before(() => {
+        helper.fs.appendFile('comp3/index.js');
+        helper.command.tagIncludeUnmodifiedWithoutBuild('2.0.0');
+      });
+      it('should set all components versions to the scope flag', () => {
+        const bitMap = helper.bitMap.read();
+        expect(bitMap.comp3.version).to.equal('2.0.0');
+        expect(bitMap.comp1.version).to.equal('2.0.0');
+        expect(bitMap.comp2.version).to.equal('2.0.0');
+      });
+    });
+  });
+  describe('using --incremented-by flag', () => {
+    let afterFirstTag: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      afterFirstTag = helper.scopeHelper.cloneWorkspace();
+    });
+    describe('increment the default (patch)', () => {
+      before(() => {
+        helper.fixtures.populateComponents(3, undefined, 'v2-patch');
+        helper.command.tagAllWithoutBuild('--increment-by 4');
+      });
+      it('should set the specified version to the modified component and bumped by patch the auto-tagged', () => {
+        const bitMap = helper.bitMap.read();
+        expect(bitMap.comp1.version).to.equal('0.0.5');
+        expect(bitMap.comp2.version).to.equal('0.0.5');
+        expect(bitMap.comp3.version).to.equal('0.0.5');
+      });
+    });
+    describe('increment the default (minor)', () => {
+      before(() => {
+        helper.scopeHelper.getClonedWorkspace(afterFirstTag);
+        helper.fixtures.populateComponents(3, undefined, 'v2-minor');
+        helper.command.tagAllWithoutBuild('--minor --increment-by 2');
+      });
+      it('should set the specified version to the modified component and bumped by patch the auto-tagged', () => {
+        const bitMap = helper.bitMap.read();
+        expect(bitMap.comp1.version).to.equal('0.2.0');
+        expect(bitMap.comp2.version).to.equal('0.2.0');
+        expect(bitMap.comp3.version).to.equal('0.2.0');
+      });
+    });
+    describe('auto-tag', () => {
+      before(() => {
+        helper.scopeHelper.getClonedWorkspace(afterFirstTag);
+        // modify only comp3. so then comp1 and comp2 are auto-tag pending
+        helper.fs.appendFile('comp3/index.js');
+        helper.command.tagAllWithoutBuild('--increment-by 3');
+      });
+      it('should set the specified version to the modified component and bumped by patch the auto-tagged', () => {
+        const bitMap = helper.bitMap.read();
+        expect(bitMap.comp1.version).to.equal('0.0.4');
+        expect(bitMap.comp2.version).to.equal('0.0.4');
+        expect(bitMap.comp3.version).to.equal('0.0.4');
+      });
+    });
+  });
+  describe('tag pre-release', () => {
+    let tagOutput: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      tagOutput = helper.command.tagAllWithoutBuild('--increment prerelease --prerelease-id dev');
+    });
+    it('should tag all components according to the pre-release version', () => {
+      expect(tagOutput).to.have.string('comp1@0.0.1-dev.0');
+    });
+    describe('increment pre-release', () => {
+      before(() => {
+        helper.fixtures.populateComponents(3, undefined, 'v2');
+        tagOutput = helper.command.tagAllWithoutBuild('--increment prerelease');
+      });
+      it('should use the last pre-release identifier and increment it', () => {
+        expect(tagOutput).to.have.string('comp1@0.0.1-dev.1');
+      });
+    });
+  });
+  describe('auto-tag with pre-release', () => {
+    let tagOutput: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      tagOutput = helper.command.tagWithoutBuild('comp3', '--unmodified --increment prerelease --prerelease-id dev');
+    });
+    it('should auto-tag dependents according to the pre-release version', () => {
+      expect(tagOutput).to.have.string('3 component(s) tagged');
+      expect(tagOutput).to.have.string('auto-tagged dependents');
+      const details = helper.command.runCmd('bit details');
+      expect(details).to.have.string('comp1@0.0.2-dev.0');
+    });
+  });
+  describe('auto-tag with --auto-tag-increment', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      // modify only comp3. so then comp1 and comp2 are auto-tag pending
+      helper.fs.appendFile('comp3/index.js');
+      helper.command.tagAllWithoutBuild('--major --auto-tag-increment major');
+    });
+    it('should bump the auto-tagged dependents by the given level rather than by patch', () => {
+      const bitMap = helper.bitMap.read();
+      expect(bitMap.comp3.version).to.equal('1.0.0');
+      // comp2 is a direct dependent, comp1 is a transitive one. both are auto-tagged.
+      expect(bitMap.comp2.version).to.equal('1.0.0');
+      expect(bitMap.comp1.version).to.equal('1.0.0');
+    });
+  });
+  describe('auto-tag with --auto-tag-increment different than the modified level', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      helper.fs.appendFile('comp3/index.js');
+      helper.command.tagAllWithoutBuild('--major --auto-tag-increment minor');
+    });
+    it('should bump the modified and the auto-tagged by their own levels', () => {
+      const bitMap = helper.bitMap.read();
+      expect(bitMap.comp3.version).to.equal('1.0.0');
+      expect(bitMap.comp2.version).to.equal('0.1.0');
+      expect(bitMap.comp1.version).to.equal('0.1.0');
+    });
+  });
+  describe('--auto-tag-increment along with --skip-auto-tag', () => {
+    let result: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      helper.fs.appendFile('comp3/index.js');
+      result = helper.general.runWithTryCatch('bit tag --auto-tag-increment major --skip-auto-tag');
+    });
+    it('should throw an error', () => {
+      expect(result).to.have.string('you can use either --auto-tag-increment or --skip-auto-tag, but not both');
+    });
+  });
+  describe('invalid --auto-tag-increment level', () => {
+    let result: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.tagAllWithoutBuild();
+      result = helper.general.runWithTryCatch('bit tag --unmodified --auto-tag-increment nope');
+    });
+    it('should throw an error', () => {
+      expect(result).to.have.string('invalid auto-tag-increment level "nope"');
+    });
+  });
+  // the --prerelease-id is relevant for the dependents too, so a pre-release --auto-tag-increment
+  // should be enough to justify it, even when the modified components get a plain major.
+  describe('--auto-tag-increment with a pre-release level and --prerelease-id', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      helper.command.tagAllWithoutBuild();
+      helper.fs.appendFile('comp3/index.js');
+      helper.command.tagAllWithoutBuild('--major --auto-tag-increment prerelease --prerelease-id dev');
+    });
+    it('should use the prerelease identifier for the auto-tagged dependents', () => {
+      const bitMap = helper.bitMap.read();
+      expect(bitMap.comp3.version).to.equal('1.0.0');
+      expect(bitMap.comp2.version).to.equal('0.0.2-dev.0');
+      expect(bitMap.comp1.version).to.equal('0.0.2-dev.0');
+    });
+  });
+  describe('invalid pre-release after normal tag', () => {
+    let result: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.tagAllWithoutBuild();
+      result = helper.general.runWithTryCatch(`bit tag --unmodified --pre-release "h?h"`);
+    });
+    it('should throw an error', () => {
+      expect(result).to.have.string('unable to increment');
+    });
+    it('should not create a new version', () => {
+      const comp = helper.command.catComponent('comp1');
+      const ver1Hash = comp.versions['0.0.1'];
+      expect(comp.head).to.equal(ver1Hash);
+    });
+  });
+  describe('soft-tag pre-release', () => {
+    let tagOutput: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      tagOutput = helper.command.softTag('--pre-release dev');
+    });
+    it('should save the pre-release name in the .bitmap file', () => {
+      const bitMap = helper.bitMap.read();
+      const nextVersion = bitMap.comp1.nextVersion;
+      expect(nextVersion.version).to.equal('prerelease');
+      expect(nextVersion.preRelease).to.equal('dev');
+    });
+    describe('persist the soft-tag', () => {
+      before(() => {
+        tagOutput = helper.command.persistTagWithoutBuild();
+      });
+      it('should use the data in the .bitmap file and tag as a pre-release version', () => {
+        expect(tagOutput).to.have.string('comp1@0.0.1-dev.0');
+      });
+    });
+  });
+  describe('builder data saved in the model', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.tagAllComponents();
+    });
+    it('should not save the build data twice', () => {
+      const comp1 = helper.command.catComponent('comp1@latest');
+      const builderExt = helper.general.getExtension(comp1, Extensions.builder);
+      const taskIds = builderExt.data.pipeline.map((p) => `${p.taskId}:${p.taskName}`);
+      const taskIdsUniq = uniq(taskIds);
+      expect(taskIds.length).to.equal(taskIdsUniq.length);
+    });
+  });
+  describe('soft tag --minor with auto-tag', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents();
+      helper.command.tagAllWithoutBuild();
+      helper.fs.appendFile('comp2/index.js');
+      helper.command.softTag('--minor');
+    });
+    it('should not bump the auto-tagged with minor but with patch', () => {
+      const bitMap = helper.bitMap.readComponentsMapOnly();
+      expect(bitMap.comp2.nextVersion.version).equal('minor');
+      expect(bitMap.comp1.nextVersion.version).equal('patch');
+    });
+  });
+  describe('with tiny cache', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1, false);
+      helper.command.tagAllWithoutBuild();
+      helper.fixtures.populateComponents(1, false, 'v2');
+      helper.command.runCmd('bit config set cache.max.objects 1');
+    });
+    after(() => {
+      helper.command.runCmd('bit config del cache.max.objects');
+    });
+    // previously, it was throwing "VersionNotFound" and "VersionNotFoundOnFS".
+    it('should not throw', () => {
+      // don't skip the build here. otherwise, you won't be able to reproduce.
+      expect(() => helper.command.tagAllComponents()).not.to.throw();
+    });
+  });
+  describe('package.json update', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.tagAllWithoutBuild();
+    });
+    it('should update package.json on the workspace with the new tag', () => {
+      const pkgJson = helper.fs.readJsonFile(
+        path.join('node_modules', `@${helper.scopes.remote}/comp1`, 'package.json')
+      );
+      expect(pkgJson.version).to.equal('0.0.1');
+      expect(pkgJson.componentId.version).to.equal('0.0.1');
+    });
+  });
+  describe('tagging a snapped component by specifying the id', () => {
+    let tagOutput: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.snapAllComponentsWithoutBuild();
+      tagOutput = helper.command.tagWithoutBuild('comp1');
+    });
+    it('should tag successfully without needing to add --unmodified', () => {
+      expect(tagOutput).to.have.string('comp1@0.0.1');
+    });
+  });
+  describe('tag with versions file', () => {
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(3);
+      const versionsFileContent = `# Default version for unspecified components
+DEFAULT: minor
+
+# Component-specific versions
+${helper.scopes.remote}/comp1: 2.0.0
+${helper.scopes.remote}/comp3: 1.5.0`;
+      helper.fs.outputFile('versions.txt', versionsFileContent);
+      helper.command.tagWithoutBuild('--versions-file versions.txt');
+    });
+    it('should tag components according to the versions file', () => {
+      const bitMap = helper.bitMap.read();
+      expect(bitMap.comp1.version).to.equal('2.0.0'); // specific version from file
+      expect(bitMap.comp2.version).to.equal('0.1.0'); // default version (minor) from file
+      expect(bitMap.comp3.version).to.equal('1.5.0'); // specific version from file
+    });
+    it('should show correct output with versions from file', () => {
+      const status = helper.command.status();
+      expect(status).to.have.string('comp1 - versions: 2.0.0');
+      expect(status).to.have.string('comp2 - versions: 0.1.0');
+      expect(status).to.have.string('comp3 - versions: 1.5.0');
+    });
+  });
+  describe('maintain two main branches 1.x and 2.x, tagging the older branch 1.x with a patch', () => {
+    let ver2Head: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+      helper.command.tagAllWithoutBuild('--ver 1.0.0');
+      helper.fixtures.populateComponents(1, undefined, 'version2');
+      helper.command.tagAllWithoutBuild('--ver 2.0.0');
+      ver2Head = helper.command.getHead('comp1');
+      helper.command.export();
+      helper.command.checkoutVersion('1.0.0', 'comp1', '-x');
+      helper.fixtures.populateComponents(1, undefined, 'version101');
+      helper.command.tagAllWithoutBuild('--ver 1.0.1 --detach-head');
+      helper.command.export();
+    });
+    after(() => {
+      helper.command.resetFeatures();
+    });
+    it('should keep the head as 2.x and not change it to 1.0.1', () => {
+      const comp = helper.command.catComponent('comp1');
+      expect(comp.head).to.equal(ver2Head);
+    });
+    it('should update the .bitmap according to the patch version and not the head', () => {
+      const bitmap = helper.bitMap.read();
+      expect(bitmap.comp1.version).to.equal('1.0.1');
+    });
+    describe('importing the component to a new workspace', () => {
+      before(() => {
+        helper.scopeHelper.reInitWorkspace();
+        helper.scopeHelper.addRemoteScope();
+        helper.command.importComponent('comp1', '-x');
+      });
+      it('should import the latest: 2.x and not the patch 1.01', () => {
+        const bitmap = helper.bitMap.read();
+        expect(bitmap.comp1.version).to.equal('2.0.0');
+      });
+    });
+  });
+  describe('export with detached-head when head was not exported yet', () => {
+    let versionHash2_0_0: string;
+    let versionHash2_0_1: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+
+      // Step 1: Tag 0.0.1 and export
+      helper.command.tagAllWithoutBuild();
+      helper.command.export();
+
+      // Step 2: Tag 2.0.0 but DON'T export (this sets head to 2.0.0)
+      helper.command.tagAllWithoutBuild('--ver 2.0.0 --unmodified');
+      const comp = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      versionHash2_0_0 = comp.versions['2.0.0'];
+
+      // Step 3: Checkout to 0.0.1
+      helper.command.runCmd('bit checkout 0.0.1 --all -x');
+
+      // Step 4: Tag with --detach-head (creates a detached head 2.0.1)
+      helper.command.tagAllWithoutBuild('--unmodified --detach-head');
+      const compAfterDetach = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      versionHash2_0_1 = compAfterDetach.versions['2.0.1'];
+
+      // Step 5: Export - should export BOTH 2.0.0 (head) and 2.0.1 (detached head)
+      helper.command.export();
+    });
+    it('should have exported both head (2.0.0) and detached-head (2.0.1) to the remote', () => {
+      const remoteComp = helper.command.catComponent(`${helper.scopes.remote}/comp1`, helper.scopes.remotePath);
+      expect(remoteComp.versions).to.have.property('2.0.0');
+      expect(remoteComp.versions).to.have.property('2.0.1');
+    });
+    it('should have the version object for 2.0.0 on the remote', () => {
+      expect(() => helper.command.catObject(versionHash2_0_0, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    it('should have the version object for 2.0.1 on the remote', () => {
+      expect(() => helper.command.catObject(versionHash2_0_1, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    describe('importing the component to a new workspace', () => {
+      before(() => {
+        helper.scopeHelper.reInitWorkspace();
+        helper.scopeHelper.addRemoteScope();
+      });
+      it('should successfully import without errors', () => {
+        expect(() => helper.command.importComponent('comp1', '-x')).to.not.throw();
+      });
+      it('should have version 2.0.0 available (the head)', () => {
+        const comp = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+        expect(comp.versions).to.have.property('2.0.0');
+      });
+      it('should have the version object for 2.0.0', () => {
+        expect(() => helper.command.catObject(versionHash2_0_0)).to.not.throw();
+      });
+    });
+  });
+  describe('export with detached-head when head and its parent were not exported yet', () => {
+    let versionHash2_0_0: string;
+    let snapHash: string;
+    let versionHash2_0_1: string;
+    let versionHash2_0_2: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+
+      // Step 1: Tag 0.0.1 and export
+      helper.command.tagAllWithoutBuild();
+      helper.command.export();
+
+      // Step 2: Tag 2.0.0 but DON'T export (this sets head to 2.0.0)
+      helper.command.tagAllWithoutBuild('--ver 2.0.0 --unmodified');
+      const comp = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      versionHash2_0_0 = comp.versions['2.0.0'];
+
+      // Step 3: Snap but DON'T export (creates an untagged snap)
+      helper.command.snapAllComponentsWithoutBuild('--unmodified');
+      const compAfterSnap = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      snapHash = compAfterSnap.head;
+
+      // Step 4: Tag 2.0.1 but DON'T export (this sets head to 2.0.1)
+      // Now we have 2.0.0 (tag), snap, and 2.0.1 (tag) all unexported
+      helper.command.tagAllWithoutBuild('--ver 2.0.1 --unmodified');
+      const comp2 = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      versionHash2_0_1 = comp2.versions['2.0.1'];
+
+      // Step 5: Checkout to 0.0.1
+      helper.command.runCmd('bit checkout 0.0.1 --all -x');
+
+      // Step 6: Tag with --detach-head (creates a detached head 2.0.2)
+      helper.command.tagAllWithoutBuild('--unmodified --detach-head');
+      const compAfterDetach = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+      versionHash2_0_2 = compAfterDetach.versions['2.0.2'];
+
+      // Step 7: Export - should export 2.0.0, snap, 2.0.1 (head), and 2.0.2 (detached head)
+      helper.command.export();
+    });
+    it('should have exported all versions: 2.0.0, snap, 2.0.1 (head), and 2.0.2 (detached-head)', () => {
+      const remoteComp = helper.command.catComponent(`${helper.scopes.remote}/comp1`, helper.scopes.remotePath);
+      expect(remoteComp.versions).to.have.property('2.0.0');
+      expect(remoteComp.versions).to.have.property('2.0.1');
+      expect(remoteComp.versions).to.have.property('2.0.2');
+      // The snap is untagged, so it's referenced by the head, not in versions
+      expect(remoteComp.head).to.equal(versionHash2_0_1);
+    });
+    it('should have the version object for 2.0.0 on the remote', () => {
+      expect(() => helper.command.catObject(versionHash2_0_0, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    it('should have the version object for the snap on the remote', () => {
+      expect(() => helper.command.catObject(snapHash, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    it('should have the version object for 2.0.1 on the remote', () => {
+      expect(() => helper.command.catObject(versionHash2_0_1, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    it('should have the version object for 2.0.2 on the remote', () => {
+      expect(() => helper.command.catObject(versionHash2_0_2, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    describe('importing the component to a new workspace', () => {
+      before(() => {
+        helper.scopeHelper.reInitWorkspace();
+        helper.scopeHelper.addRemoteScope();
+      });
+      it('should successfully import without errors', () => {
+        expect(() => helper.command.importComponent('comp1', '-x')).to.not.throw();
+      });
+      it('should have all versions in the component metadata', () => {
+        const comp = helper.command.catComponent(`${helper.scopes.remote}/comp1`);
+        expect(comp.versions).to.have.property('2.0.0');
+        expect(comp.versions).to.have.property('2.0.1');
+        expect(comp.versions).to.have.property('2.0.2');
+      });
+      it('should have the version object for 2.0.1 (the head that was imported)', () => {
+        expect(() => helper.command.catObject(versionHash2_0_1)).to.not.throw();
+      });
+      it('should be able to import the snap directly by hash', () => {
+        expect(() => helper.command.importComponent(`comp1@${snapHash}`, '-x --override')).to.not.throw();
+      });
+    });
+  });
+  describe('export with --detach-head after merging a lane', () => {
+    let headOnMain: string;
+    let firstSnapOnLane: string;
+    let headOnLane: string;
+    before(() => {
+      helper.scopeHelper.setWorkspaceWithRemoteScope();
+      helper.fixtures.populateComponents(1);
+
+      // Step 1: Tag 1.0.0 and export
+      helper.command.tagAllWithoutBuild('--ver 1.0.0');
+      helper.command.export();
+
+      // Step 2: Create a lane from 1.0.0 and make snaps
+      helper.command.createLane('dev');
+      helper.command.snapAllComponentsWithoutBuild('--unmodified');
+      firstSnapOnLane = helper.command.getHeadOfLane('dev', 'comp1');
+      helper.command.snapAllComponentsWithoutBuild('--unmodified');
+      headOnLane = helper.command.getHeadOfLane('dev', 'comp1');
+      helper.command.export();
+
+      // Step 3: Switch back to main and tag 2.0.0 (DON'T export - this is the key!)
+      helper.command.switchLocalLane('main', '-x');
+      helper.command.tagAllWithoutBuild('--unmodified --ver 2.0.0');
+      headOnMain = helper.command.getHead('comp1');
+
+      // Step 4: Merge the lane with --detach-head
+      helper.command.mergeLane('dev', '--detach-head -x');
+      // Step 5: Export - should export 2.0.0 (unexported main head)
+      helper.command.export();
+    });
+    it('should have exported the unexported main head (2.0.0)', () => {
+      const remoteComp = helper.command.catComponent(`${helper.scopes.remote}/comp1`, helper.scopes.remotePath);
+      expect(remoteComp.versions).to.have.property('2.0.0');
+    });
+    it('should have the version object for 2.0.0 on the remote', () => {
+      expect(() => helper.command.catObject(headOnMain, false, helper.scopes.remotePath)).to.not.throw();
+    });
+    it('should have the lane snaps on the remote (they were already exported on the lane)', () => {
+      expect(() => helper.command.catObject(firstSnapOnLane, false, helper.scopes.remotePath)).to.not.throw();
+      expect(() => helper.command.catObject(headOnLane, false, helper.scopes.remotePath)).to.not.throw();
+    });
+  });
+});

@@ -1,0 +1,1046 @@
+/* eslint-disable react/destructuring-assignment */
+/* eslint-disable react/require-default-props */
+/* eslint-disable @typescript-eslint/no-use-before-define */ // hoisted function components used before their definition
+import type { HTMLAttributes, ReactNode } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState, forwardRef, startTransition } from 'react';
+import classnames from 'classnames';
+import { useCode } from '@teambit/code.ui.queries.get-component-code';
+import { ComponentID as ComponentIdValue } from '@teambit/component-id';
+import type { LegacyComponentLog } from '@teambit/legacy-component-log';
+import type { ComponentID, NavPlugin } from '@teambit/component';
+import { CollapsibleMenuNav, ComponentContext, ComponentDescriptorContext, useComponent } from '@teambit/component';
+import { ComponentCompareContext } from '@teambit/component.ui.component-compare.context';
+import { useComponentCompareQuery } from '@teambit/component.ui.component-compare.hooks.use-component-compare';
+import type {
+  FileCompareResult,
+  FieldCompareResult,
+} from '@teambit/component.ui.component-compare.models.component-compare-model';
+import { useCompareQueryParam } from '@teambit/component.ui.component-compare.hooks.use-component-compare-url';
+import { ComponentCompareVersionPicker } from '@teambit/component.ui.component-compare.version-picker';
+import type { ComponentCompareHooks } from '@teambit/component.ui.component-compare.models.component-compare-hooks';
+import { useLocation } from '@teambit/base-react.navigation.link';
+import { SlotRouter } from '@teambit/ui-foundation.ui.react-router.slot-router';
+import type {
+  ComponentCompareProps,
+  TabItem,
+} from '@teambit/component.ui.component-compare.models.component-compare-props';
+import { groupByVersion } from '@teambit/component.ui.component-compare.utils.group-by-version';
+import { sortTabs } from '@teambit/component.ui.component-compare.utils.sort-tabs';
+import { sortByDateDsc } from '@teambit/component.ui.component-compare.utils.sort-logs';
+import { extractLazyLoadedData } from '@teambit/component.ui.component-compare.utils.lazy-loading';
+import { BlockSkeleton, WordSkeleton } from '@teambit/base-ui.loaders.skeleton';
+import { ChangeType } from '@teambit/component.ui.component-compare.models.component-compare-change-type';
+import { useApiDiff } from '@teambit/semantics.ui.api-diff-view';
+import type { APIDiffResult } from '@teambit/semantics.ui.api-diff-view';
+import type { ComponentComparePair, CompareComponentData } from './compare-data-context';
+import { useCompareData } from './compare-data-context';
+import { useFileRegistryRegister, useAspectRegistryRegister, useFileRegistry } from './file-registry';
+
+import styles from './component-compare.module.scss';
+
+// Extend ChangeType with API (the external enum doesn't have it yet)
+const ChangeTypeAPI = 'API' as unknown as ChangeType;
+
+// single source of truth for the API diff model — see api-diff-view's api-diff-model.
+export type { APIDiffResult, APIDiffChange, APIDiffDetail } from '@teambit/semantics.ui.api-diff-view';
+
+const findPrevVersionFromCurrent = (compareVersion) => (_, index: number, logs: LegacyComponentLog[]) => {
+  if (compareVersion === 'workspace' || logs.length === 1) return true;
+
+  if (index === 0) return false;
+
+  const prevIndex = index - 1;
+
+  return logs[prevIndex].tag === compareVersion || logs[prevIndex].hash === compareVersion;
+};
+
+function deriveChangeTypeCssForNav(tab: TabItem, changed: ChangeType[] | null | undefined): string | null {
+  if (!changed || !tab.changeType) return null;
+  const hasChanged = changed.some((change) => tab.changeType === change);
+  return hasChanged ? styles.hasChanged : null;
+}
+
+function onNavClicked({ hooks, id }: { hooks?: ComponentCompareHooks; id?: string }) {
+  if (!hooks?.tabs?.onClick) return undefined;
+  return (e) => hooks?.tabs?.onClick?.(id, e);
+}
+
+function TabLoader() {
+  return <WordSkeleton className={styles.tabLoader} length={5} />;
+}
+
+function CompareMenuTab({
+  children,
+  changed,
+  changeTypeCss,
+  loading,
+  className,
+  ...rest
+}: HTMLAttributes<HTMLDivElement> & {
+  changeTypeCss?: string | null;
+  loading?: boolean;
+  changed?: ChangeType[] | null;
+}) {
+  const hasChanged = useMemo(
+    () => changed?.some((change) => change !== ChangeType.NONE && change !== ChangeType.NEW),
+    [changed]
+  );
+
+  if (loading) return <TabLoader />;
+
+  return (
+    <div {...rest} className={classnames(styles.compareMenuTab, className)}>
+      {changeTypeCss && hasChanged && <div className={classnames(styles.indicator, changeTypeCss)} />}
+      <div className={classnames(styles.menuTab)}>{children}</div>
+    </div>
+  );
+}
+
+function CompareMenuNav({ tabs, state, hooks, changes: changed }: ComponentCompareProps) {
+  const activeTab = state?.tabs?.id;
+  const isControlled = state?.tabs?.controlled;
+  const tabsFromProps = extractLazyLoadedData(tabs) || [];
+
+  const extractedTabs: [string, NavPlugin & TabItem][] = useMemo(
+    () =>
+      tabsFromProps.sort(sortTabs).map((tab, index) => {
+        const isActive = !state ? undefined : !!activeTab && !!tab?.id && activeTab === tab.id;
+        const changeTypeCss = deriveChangeTypeCssForNav(tab, changed);
+        const loading = changed === undefined;
+        const key = `${tab.id}-tab-${changeTypeCss}`;
+        return [
+          tab.id || `tab-${index}`,
+          {
+            ...tab,
+            props: {
+              ...tab.props,
+              key,
+              displayName: (!loading && tab.displayName) || undefined,
+              active: isActive,
+              onClick: onNavClicked({ id: tab.id, hooks }),
+              href: (!isControlled && tab.props?.href) || undefined,
+              activeClassName: (!loading && styles.activeNav) || styles.loadingNav,
+              className: styles.navItem,
+              children: (
+                <CompareMenuTab key={key} loading={loading} changeTypeCss={changeTypeCss} changed={changed}>
+                  {tab.props?.children}
+                </CompareMenuTab>
+              ),
+            },
+          },
+        ];
+      }),
+    [tabsFromProps.length, activeTab, changed, changed?.length]
+  );
+
+  const sortedTabs = useMemo(
+    () => extractedTabs.filter(([, tab]) => !tab.widget),
+    [extractedTabs.length, activeTab, changed?.length, changed]
+  );
+  const sortedWidgets = useMemo(
+    () => extractedTabs.filter(([, tab]) => tab.widget),
+    [extractedTabs.length, activeTab, changed?.length, changed]
+  );
+
+  return (
+    <div className={styles.navContainer}>
+      <CollapsibleMenuNav navPlugins={sortedTabs} widgetPlugins={sortedWidgets} />
+    </div>
+  );
+}
+
+function deriveChangeType(
+  baseId?: ComponentID,
+  compareId?: ComponentID,
+  fileCompareDataByName?: Map<string, FileCompareResult> | null,
+  fieldCompareDataByName?: Map<string, FieldCompareResult> | null,
+  testCompareDataByName?: Map<string, FileCompareResult> | null,
+  apiDiffResult?: APIDiffResult | null
+): ChangeType[] | undefined | null {
+  if (!baseId && !compareId) return null;
+  if (!baseId?.version) return [ChangeType.NEW];
+
+  if (fileCompareDataByName === null || fieldCompareDataByName === null) return null;
+  if (fileCompareDataByName === undefined || fieldCompareDataByName === undefined) return undefined;
+
+  const fileCompareData = [...fileCompareDataByName.values()];
+
+  const hasApiChanges = apiDiffResult?.hasChanges ?? false;
+
+  if (
+    fieldCompareDataByName.size === 0 &&
+    (fileCompareDataByName.size === 0 || fileCompareData.every((f) => f.status === 'UNCHANGED')) &&
+    !hasApiChanges
+  ) {
+    return [ChangeType.NONE];
+  }
+
+  const changed: ChangeType[] = [];
+  const DEPS_FIELD = ['dependencies', 'devDependencies', 'extensionDependencies', 'packageDependencies'];
+
+  if (testCompareDataByName?.size) {
+    changed.push(ChangeType.TESTS);
+  }
+
+  if (fileCompareDataByName.size > 0 && fileCompareData.some((f) => f.status !== 'UNCHANGED')) {
+    changed.push(ChangeType.SOURCE_CODE);
+  }
+
+  if (fieldCompareDataByName.size > 0) {
+    changed.push(ChangeType.ASPECTS);
+  }
+
+  if ([...fieldCompareDataByName.values()].some((field) => DEPS_FIELD.includes(field.fieldName))) {
+    changed.push(ChangeType.DEPENDENCY);
+  }
+
+  if (hasApiChanges) {
+    changed.push(ChangeTypeAPI);
+  }
+
+  return changed;
+}
+
+function CompareLoader({ className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={className} {...rest}>
+      <BlockSkeleton className={styles.navLoader} lines={3} />
+      <div className={styles.compareLoader}>
+        <div className={styles.compareViewLoader}>
+          <BlockSkeleton lines={30} />
+        </div>
+        <div className={styles.compareSidebarLoader}>
+          <BlockSkeleton lines={30} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RenderCompareScreen(
+  props: ComponentCompareProps & {
+    baseVersion?: string;
+    compareVersion?: string;
+    compareHasLocalChanges?: boolean;
+    componentId: string;
+    loading?: boolean;
+  }
+) {
+  const {
+    routes,
+    state,
+    loading,
+    Loader = CompareLoader,
+    baseVersion,
+    compareVersion,
+    compareHasLocalChanges,
+    componentId,
+    hidden,
+  } = props;
+
+  const showVersionPicker = state?.versionPicker?.element !== null;
+
+  return (
+    <>
+      {showVersionPicker && (
+        <div className={styles.top}>
+          {state?.versionPicker?.element || (
+            <ComponentCompareVersionPicker
+              componentId={componentId}
+              baseVersion={baseVersion}
+              compareVersion={compareVersion}
+              compareHasLocalChanges={compareHasLocalChanges}
+              host={props.host}
+              customUseComponent={props.customUseComponent}
+            />
+          )}
+        </div>
+      )}
+      {loading && !hidden && <Loader className={classnames(styles.loader)} />}
+      {!loading && (
+        <div className={classnames(styles.bottom, hidden && styles.hidden)}>
+          <CompareMenuNav {...props} />
+          {(extractLazyLoadedData(routes) || []).length > 0 && (
+            <SlotRouter routes={extractLazyLoadedData(routes) || []} />
+          )}
+          {state?.tabs?.element}
+        </div>
+      )}
+    </>
+  );
+}
+
+// eslint-disable-next-line complexity
+export function ComponentCompare(props: ComponentCompareProps) {
+  const {
+    host: hostFromProps,
+    baseId: baseIdFromProps,
+    compareId: compareIdFromProps,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    routes,
+    state,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    tabs,
+    className,
+    hooks,
+    changes: changesFromProps,
+    customUseComponent,
+    Loader = CompareLoader,
+    baseContext,
+    compareContext,
+    isFullScreen,
+    hidden = false,
+    compareIdOverride,
+    baseIdOverride,
+    ...rest
+  } = props;
+
+  const baseVersion = useCompareQueryParam('baseVersion');
+
+  const component = useContext(ComponentContext);
+  const componentDescriptor = useContext(ComponentDescriptorContext);
+  const location = useLocation();
+  const isWorkspace = hostFromProps === 'teambit.workspace/workspace';
+  const compareHost =
+    isWorkspace && !location?.search.includes('version') && !compareIdFromProps && component.logs?.length === 0
+      ? hostFromProps
+      : 'teambit.scope/scope';
+  const host = 'teambit.scope/scope';
+  const {
+    component: compareComponent,
+    loading: loadingCompare,
+    componentDescriptor: compareComponentDescriptor,
+  } = useComponent(compareHost, compareIdOverride?.toString() || compareIdFromProps?.toString(), {
+    skip: hidden || (!compareIdFromProps && !compareIdOverride),
+    customUseComponent,
+    logFilters: {
+      log: {
+        // @todo - enable it when we implement lazy loading for logs
+        // limit: 3,
+      },
+    },
+  });
+
+  const allVersionInfo = useMemo(
+    () => (compareComponent?.logs || component.logs)?.slice().sort(sortByDateDsc) || [],
+    [component.id.toString(), loadingCompare, component.logs?.length, compareComponent?.logs?.length]
+  );
+  const isNew = useMemo(() => allVersionInfo.length === 0, [allVersionInfo]);
+  const compareVersion =
+    isWorkspace && !isNew && !location?.search.includes('version') && !compareIdFromProps
+      ? 'workspace'
+      : component.id.version;
+  const compareIsLocalChanges = compareVersion === 'workspace';
+
+  const lastVersionInfo = useMemo(() => {
+    if (compareIsLocalChanges) return allVersionInfo[0];
+    const prevVersionInfo = allVersionInfo.find(findPrevVersionFromCurrent(compareVersion));
+    return prevVersionInfo;
+  }, [allVersionInfo, compareVersion, compareIsLocalChanges]);
+
+  const baseId = React.useMemo(
+    () =>
+      baseIdFromProps ||
+      (baseVersion && component.id.changeVersion(baseVersion)) ||
+      (lastVersionInfo && component.id.changeVersion(lastVersionInfo.tag || lastVersionInfo.hash)) ||
+      component.id,
+    [loadingCompare, baseIdFromProps, baseVersion, lastVersionInfo?.tag, lastVersionInfo?.hash]
+  );
+
+  const {
+    component: base,
+    loading: loadingBase,
+    componentDescriptor: baseComponentDescriptor,
+  } = useComponent(host, baseIdOverride?.toString() || baseId?.toString(), {
+    customUseComponent,
+    skip: hidden || (!baseId && !baseIdOverride),
+    logFilters: {
+      log: {
+        // @todo - enable it when we implement lazy loading for logs
+        // limit: 3,
+      },
+    },
+  });
+
+  const loading = loadingBase || loadingCompare;
+
+  const compare = compareIdFromProps ? compareComponent : component;
+
+  const compCompareId = `${base?.id.toString()}-${compare?.id.toString()}`;
+
+  const logsByVersion = useMemo(() => {
+    return (compare?.logs || []).slice().reduce(groupByVersion, new Map<string, LegacyComponentLog>());
+  }, [compare?.id.toString()]);
+
+  const skipComponentCompareQuery =
+    hidden || (base?.id.version?.toString() === compare?.id.version?.toString() && !compareIsLocalChanges);
+
+  const { loading: compCompareLoading, componentCompareData: componentCompareDataRaw } = useComponentCompareQuery(
+    base?.id.toString(),
+    compare?.id.toString(),
+    undefined,
+    skipComponentCompareQuery
+  );
+  // version skew: the GraphQL response carries `tests`, the npm-published
+  // ComponentCompareQueryResponse doesn't declare it yet
+  const componentCompareData = componentCompareDataRaw as
+    | (typeof componentCompareDataRaw & { tests?: Array<FileCompareResult & { fileName: string }> })
+    | undefined;
+
+  const { loading: apiDiffLoading, result: apiDiffResult } = useApiDiff(base?.id.toString(), compare?.id.toString(), {
+    skip: hidden,
+  });
+
+  const fileCompareDataByName = useMemo(() => {
+    if (loading || compCompareLoading) return undefined;
+    if (!compCompareLoading && !componentCompareData) return null;
+
+    const fileCompareDataByNameLookup = new Map<string, FileCompareResult>();
+    (componentCompareData?.code || []).forEach((codeCompareData) => {
+      fileCompareDataByNameLookup.set(codeCompareData.fileName, codeCompareData);
+    });
+    return fileCompareDataByNameLookup;
+  }, [compCompareLoading, loading, compCompareId, componentCompareData]);
+
+  const fieldCompareDataByName = useMemo(() => {
+    if (loading || compCompareLoading) return undefined;
+    if (!compCompareLoading && !componentCompareData) return null;
+    const fieldCompareDataByNameLookup = new Map<string, FieldCompareResult>();
+    (componentCompareData?.aspects || []).forEach((aspectCompareData) => {
+      fieldCompareDataByNameLookup.set(aspectCompareData.fieldName, aspectCompareData);
+    });
+    return fieldCompareDataByNameLookup;
+  }, [compCompareLoading, loading, compCompareId, componentCompareData]);
+
+  const testCompareDataByName = useMemo(() => {
+    if (loading || compCompareLoading) return undefined;
+    if (!compCompareLoading && !componentCompareData) return null;
+    const testCompareDataByNameLookup = new Map<string, FileCompareResult>();
+    (componentCompareData?.tests || []).forEach((testCompareData) => {
+      testCompareDataByNameLookup.set(testCompareData.fileName, testCompareData);
+    });
+    return testCompareDataByNameLookup;
+  }, [compCompareLoading, loading, compCompareId, componentCompareData]);
+
+  const resolvedApiDiff = useMemo(() => {
+    if (loading || apiDiffLoading) return undefined;
+    return apiDiffResult ?? null;
+  }, [loading, apiDiffLoading, compCompareId, apiDiffResult]);
+
+  // memoized so consumers of this context (and the child screen) don't reconcile on every render when
+  // the underlying models/diff data are unchanged.
+  const componentCompareModel = useMemo(
+    () => ({
+      compare: compare && {
+        model: compare,
+        descriptor: compareComponentDescriptor || componentDescriptor,
+        hasLocalChanges: compareIsLocalChanges,
+      },
+      base: base && {
+        model: base,
+        descriptor: baseComponentDescriptor,
+      },
+      loading,
+      logsByVersion,
+      state,
+      hooks,
+      baseContext,
+      compareContext,
+      fieldCompareDataByName,
+      fileCompareDataByName,
+      testCompareDataByName,
+      apiDiffResult: resolvedApiDiff,
+      isFullScreen,
+      hidden,
+    }),
+    [
+      compare,
+      compareComponentDescriptor,
+      componentDescriptor,
+      compareIsLocalChanges,
+      base,
+      baseComponentDescriptor,
+      loading,
+      logsByVersion,
+      state,
+      hooks,
+      baseContext,
+      compareContext,
+      fieldCompareDataByName,
+      fileCompareDataByName,
+      testCompareDataByName,
+      resolvedApiDiff,
+      isFullScreen,
+      hidden,
+    ]
+  );
+
+  const changes = useMemo(
+    () =>
+      changesFromProps ||
+      deriveChangeType(
+        baseId,
+        compare?.id,
+        fileCompareDataByName,
+        fieldCompareDataByName,
+        testCompareDataByName,
+        resolvedApiDiff
+      ),
+    [
+      changesFromProps,
+      baseId,
+      compare,
+      fileCompareDataByName,
+      fieldCompareDataByName,
+      testCompareDataByName,
+      resolvedApiDiff,
+    ]
+  );
+
+  return (
+    <ComponentCompareContext.Provider value={componentCompareModel}>
+      <div className={classnames(styles.componentCompareContainer, className)} {...rest}>
+        <RenderCompareScreen
+          key={compCompareId}
+          {...props}
+          componentId={
+            compare?.id?.toStringWithoutVersion() ||
+            baseId.toStringWithoutVersion() ||
+            component?.id?.toStringWithoutVersion()
+          }
+          baseVersion={baseId.version}
+          compareVersion={compareIdFromProps?.version || component.id.version}
+          compareHasLocalChanges={compareIsLocalChanges}
+          changes={changes}
+          loading={loading}
+          Loader={Loader}
+        />
+      </div>
+    </ComponentCompareContext.Provider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// InlineComponentCompare + ComponentCompareHeader (ported from new-changes)
+// ---------------------------------------------------------------------------
+
+export type InlineComponentCompareProps = {
+  name: string;
+  baseId?: string;
+  compareId: string;
+  baseVersion?: string;
+  compareVersion?: string;
+  baseUrl?: string;
+  compareUrl?: string;
+  envIcon?: string;
+  changeTags?: Array<{ label: string; color: string }>;
+  accentColor?: string;
+  tabs?: TabItem[];
+  allTabs?: TabItem[];
+  children?: ReactNode;
+  className?: string;
+  host?: string;
+  previewUrl?: string;
+  /**
+   * Provide the base/compare model+descriptor directly instead of letting the inner context re-fetch
+   * them by id. Needed for the single-component compare page: in workspace local-changes mode
+   * `compareId` is deliberately set equal to `baseId` (to trigger the server's local diff for the
+   * bulk code query), so re-fetching by id would load the same snap for both sides — making deps/
+   * config/preview identical. The page already holds the correct pair (base = the scope's published
+   * snap, compare = the live workspace component), so it passes them through here. `compareId` is
+   * still used as-is to key the bulk code/aspect/test data. Lane-compare omits these and re-fetches.
+   */
+  baseOverride?: { model?: any; descriptor?: any; hasLocalChanges?: boolean };
+  compareOverride?: { model?: any; descriptor?: any; hasLocalChanges?: boolean };
+  /**
+   * Extra `data-*` attributes stamped on the panel root. Lane-compare uses these (`data-has-code`,
+   * `data-has-deps`, …) to drive per-view-mode visibility purely in CSS, so switching modes never
+   * remounts panels — it only flips the `[data-view-mode]` attribute on the pane. The object MUST be
+   * referentially stable across view-mode changes (derive it from view-mode-independent data) or it
+   * defeats React.memo and reintroduces the re-render storm this whole design avoids.
+   */
+  dataAttributes?: Record<string, string>;
+};
+
+/**
+ * Grants queued lazy mounts one animation frame each. Lazy sections/tabs that enter the viewport in
+ * the same frame would otherwise all mount in a single React commit — and each mount runs real work
+ * (full diff computation, syntax tokenizing, iframe attachment), so a burst of N becomes one
+ * N×-long main-thread task and a visible frame drop. Spreading them one-per-frame keeps every task
+ * short; the skeletons cover the (few-hundred-ms worst case) gap, so it reads as smooth streaming.
+ * Returns a cancel function — callers MUST invoke it on unmount so a queued mount can't fire after.
+ */
+const mountQueue: Array<() => void> = [];
+let mountDrainScheduled = false;
+function scheduleStaggeredMount(fn: () => void): () => void {
+  mountQueue.push(fn);
+  if (!mountDrainScheduled) {
+    mountDrainScheduled = true;
+    requestAnimationFrame(function drain() {
+      const next = mountQueue.shift();
+      // run the mount as a transition: React time-slices the (heavy) render and lets urgent input —
+      // a view-mode click, typing in search — preempt it. Without this, each mount render is a
+      // blocking task and the page reads as frozen while diffs stream in.
+      if (next) startTransition(next);
+      if (mountQueue.length > 0) requestAnimationFrame(drain);
+      else mountDrainScheduled = false;
+    });
+  }
+  return () => {
+    const i = mountQueue.indexOf(fn);
+    if (i !== -1) mountQueue.splice(i, 1);
+  };
+}
+
+/**
+ * forwardRef + React.memo. Without memo, every parent re-render (e.g. `setViewMode` in lane-compare)
+ * re-renders all 10 mounted panels and all their nested tab subtrees — which was the source of the
+ * "view-mode switching is slow" feedback. With memo + stable props (lane-compare's `allTabs` array
+ * is hoisted to module scope), a viewMode click is now just a CSS attribute change on the
+ * `[data-view-mode]` container; the panels don't reconcile at all.
+ */
+const InlineComponentCompareInner = forwardRef<HTMLDivElement, InlineComponentCompareProps>(
+  function InlineComponentCompare(
+    {
+      name,
+      baseId,
+      compareId,
+      baseVersion,
+      compareVersion,
+      baseUrl,
+      compareUrl,
+      envIcon,
+      changeTags,
+      accentColor,
+      tabs,
+      allTabs,
+      children,
+      className,
+      host = 'teambit.scope/scope',
+      baseOverride,
+      compareOverride,
+      dataAttributes,
+    },
+    ref
+  ) {
+    const sectionRef = useRef<HTMLDivElement>(null);
+    const [hasBeenVisible, setHasBeenVisible] = useState(false);
+
+    const setRefs = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        (sectionRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        if (typeof ref === 'function') ref(node);
+        // eslint-disable-next-line no-param-reassign
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [ref]
+    );
+
+    useEffect(() => {
+      const el = sectionRef.current;
+      if (!el) return undefined;
+      let cancelQueuedMount: (() => void) | undefined;
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            observer.disconnect();
+            // several sections enter the viewport in the same frame (initial paint, fast scroll);
+            // mounting them all in one commit is a single long task that drops frames. stagger instead.
+            cancelQueuedMount = scheduleStaggeredMount(() => setHasBeenVisible(true));
+          }
+        },
+        { rootMargin: '400px 0px' }
+      );
+      observer.observe(el);
+      return () => {
+        observer.disconnect();
+        cancelQueuedMount?.();
+      };
+    }, []);
+
+    const headerStyle = accentColor ? ({ '--component-accent': accentColor } as React.CSSProperties) : undefined;
+
+    return (
+      <div
+        ref={setRefs}
+        className={`${styles.componentCompare} ${className || ''}`}
+        data-component-id={compareId.split('@')[0]}
+        style={headerStyle}
+        {...dataAttributes}
+      >
+        <ComponentCompareHeader
+          name={name}
+          componentId={compareId.split('@')[0]}
+          envIcon={envIcon}
+          baseVersion={baseVersion}
+          compareVersion={compareVersion}
+          baseUrl={baseUrl}
+          compareUrl={compareUrl}
+          changeTags={changeTags}
+        />
+
+        {!baseId && !!compareId && <NewComponentFileRegistrar compareId={compareId} />}
+
+        {/* sized to roughly match the section's contain-intrinsic-size estimate (220px incl. header)
+            so mounting real content produces minimal layout shift, and fewer sections crowd into the
+            first viewport (each one queues a staggered mount). */}
+        {!hasBeenVisible && <InlineSkeleton lines={4} className={styles.sectionPlaceholder} />}
+
+        {hasBeenVisible && (
+          <InlineContextProvider
+            baseId={baseId}
+            compareId={compareId}
+            host={host}
+            baseOverride={baseOverride}
+            compareOverride={compareOverride}
+          >
+            {allTabs
+              ? allTabs.map((tab) => (
+                  <DeferredTab key={tab.id} tabId={tab.id} lazy={tab.lazy}>
+                    {tab.element}
+                  </DeferredTab>
+                ))
+              : tabs && tabs.map((tab) => <div key={tab.id}>{tab.element}</div>)}
+            {children}
+          </InlineContextProvider>
+        )}
+      </div>
+    );
+  }
+);
+export const InlineComponentCompare = React.memo(InlineComponentCompareInner);
+
+/**
+ * Tab wrapper that stamps a `data-tab-id` for CSS-driven visibility (rules live in
+ * `lane-compare.module.scss`, scoped by `data-view-mode`).
+ *
+ * Non-lazy tabs mount eagerly: an earlier version gated children on `el.offsetParent !== null`,
+ * which UNMOUNTED hidden panels and turned each view-mode switch into a fresh data-fetch storm as
+ * remounted panels re-fired their queries. Eager mounting + Apollo's per-query cache keeps those
+ * cheap.
+ *
+ * `lazy` tabs are the exception — panels whose mounting itself is expensive regardless of CSS
+ * visibility (iframe-based preview/docs load full env preview bundles the moment the iframe hits
+ * the DOM; `display: none` does NOT stop an iframe from loading). Their children mount only when
+ * the wrapper first intersects the viewport. A hidden (`display: none`) wrapper never intersects,
+ * so inactive views mount nothing; activating the view mounts only the panels near the viewport,
+ * and scrolling mounts the rest incrementally. Once mounted, children are never unmounted, so
+ * switching views back is instant and never refetches.
+ */
+export function DeferredTab({ tabId, children, lazy }: { tabId: string; children: ReactNode; lazy?: boolean }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(!lazy);
+
+  useEffect(() => {
+    if (mounted) return undefined;
+    const el = wrapperRef.current;
+    if (!el) return undefined;
+    let cancelQueuedMount: (() => void) | undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          observer.disconnect();
+          // stagger like sections do: a view switch reveals many lazy panels at once, and mounting
+          // them in one commit is one long task (iframes, in particular, are expensive to attach).
+          cancelQueuedMount = scheduleStaggeredMount(() => setMounted(true));
+        }
+      },
+      { rootMargin: '600px 0px' }
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      cancelQueuedMount?.();
+    };
+  }, [mounted]);
+
+  return (
+    <div ref={wrapperRef} data-tab-id={tabId}>
+      {mounted ? children : <InlineSkeleton lines={1} />}
+    </div>
+  );
+}
+
+// the inline compare context has no per-version logs; share one empty map rather than allocating a new
+// one every render (which would also change the memoized context value's identity each time).
+const EMPTY_LOGS_BY_VERSION = new Map();
+
+function InlineContextProvider({
+  baseId,
+  compareId,
+  host = 'teambit.scope/scope',
+  baseOverride,
+  compareOverride,
+  children,
+}: {
+  baseId?: string;
+  compareId?: string;
+  host?: string;
+  baseOverride?: { model?: any; descriptor?: any; hasLocalChanges?: boolean };
+  compareOverride?: { model?: any; descriptor?: any; hasLocalChanges?: boolean };
+  children: ReactNode;
+}) {
+  const isNew = !baseId && !!compareId;
+
+  // When the caller supplies the model/descriptor (single-component page), use it and skip the fetch
+  // — re-fetching by id would be redundant and, in local-changes mode (compareId === baseId), wrong.
+  const { component: fetchedBaseModel, componentDescriptor: fetchedBaseDescriptor } = useComponent(host, baseId, {
+    skip: !baseId || !!baseOverride,
+    context: { batch: true },
+  });
+  const { component: fetchedCompareModel, componentDescriptor: fetchedCompareDescriptor } = useComponent(
+    host,
+    compareId,
+    {
+      skip: !compareId || !!compareOverride,
+      context: { batch: true },
+    }
+  );
+
+  const baseModel = baseOverride?.model ?? fetchedBaseModel;
+  const baseDescriptor = baseOverride?.descriptor ?? fetchedBaseDescriptor;
+  const compareModel = compareOverride?.model ?? fetchedCompareModel;
+  const compareDescriptor = compareOverride?.descriptor ?? fetchedCompareDescriptor;
+
+  const hasBase = !baseId || !!baseModel;
+  const hasCompare = !compareId || !!compareModel;
+
+  const compareData = useCompareData();
+  const componentCompareData = compareId ? compareData?.compareDataFor(compareId) : undefined;
+  // for non-new components with a compareId: undefined = bulk page not loaded yet, null = pair failed to compare.
+  // a component with no compareId (deleted in the compare lane) is never in the bulk pairs, so it is not "loading".
+  const compCompareLoading = !isNew && !!compareId && componentCompareData === undefined;
+
+  const { fileTree: newCompFileTree, loading: newCompCodeLoading } = useCode(isNew ? compareModel?.id : undefined);
+
+  const fileCompareDataByName = useMemo(() => {
+    if (isNew) {
+      if (newCompCodeLoading || !newCompFileTree) return undefined;
+      const lookup = new Map();
+      newCompFileTree.forEach((fileName: string) => {
+        lookup.set(fileName, { fileName, baseContent: '', compareContent: undefined, status: 'NEW' });
+      });
+      return lookup;
+    }
+    if (compCompareLoading) return undefined;
+    if (!componentCompareData) return null;
+    const lookup = new Map();
+    (componentCompareData.code || []).forEach((f: any) => {
+      lookup.set(f.fileName, f);
+    });
+    return lookup;
+  }, [isNew, newCompCodeLoading, newCompFileTree, compCompareLoading, componentCompareData]);
+
+  const fieldCompareDataByName = useMemo(() => {
+    if (compCompareLoading) return undefined;
+    if (!componentCompareData) return null;
+    const lookup = new Map();
+    (componentCompareData.aspects || []).forEach((a: any) => lookup.set(a.fieldName, a));
+    return lookup;
+  }, [compCompareLoading, componentCompareData]);
+
+  const testCompareDataByName = useMemo(() => {
+    if (compCompareLoading) return undefined;
+    if (!componentCompareData) return null;
+    const lookup = new Map();
+    (componentCompareData.tests || []).forEach((t: any) => lookup.set(t.fileName, t));
+    return lookup;
+  }, [compCompareLoading, componentCompareData]);
+
+  // memoized so an unrelated ancestor re-render doesn't hand every `useComponentCompare()` consumer
+  // (each mounted tab panel) a fresh context value and force it to reconcile. computed before the
+  // skeleton early-return so the hook order stays stable.
+  const contextValue = useMemo(
+    () => ({
+      base: baseModel ? { model: baseModel, descriptor: baseDescriptor } : undefined,
+      compare: compareModel
+        ? { model: compareModel, descriptor: compareDescriptor, hasLocalChanges: compareOverride?.hasLocalChanges }
+        : undefined,
+      loading: compCompareLoading,
+      logsByVersion: EMPTY_LOGS_BY_VERSION,
+      fileCompareDataByName,
+      fieldCompareDataByName,
+      testCompareDataByName,
+      isFullScreen: false,
+      hidden: false,
+    }),
+    [
+      baseModel,
+      baseDescriptor,
+      compareModel,
+      compareDescriptor,
+      compareOverride?.hasLocalChanges,
+      compCompareLoading,
+      fileCompareDataByName,
+      fieldCompareDataByName,
+      testCompareDataByName,
+    ]
+  );
+
+  if (!hasBase || !hasCompare) {
+    return <InlineSkeleton lines={2} />;
+  }
+
+  return <ComponentCompareContext.Provider value={contextValue as any}>{children}</ComponentCompareContext.Provider>;
+}
+
+/**
+ * registers the file list of a NEW component (one with no base) into the FileRegistry for the sidebar.
+ * non-new components are fed in bulk by `RegistryFeeder`. `useCode` is an external hook that cannot
+ * forward a batch context, so these (minority) queries stay unbatched.
+ * compositions are intentionally not registered here — the FileRegistry compositions store has no
+ * readers; `lane-compare.tsx` derives composition info independently from `useLaneComponents`.
+ */
+export function NewComponentFileRegistrar({ compareId }: { compareId: string }) {
+  const newCompId = useMemo(() => ComponentIdValue.fromString(compareId), [compareId]);
+  const { fileTree: newCompFileTree, loading } = useCode(newCompId);
+
+  const registryFiles = useMemo(() => {
+    if (loading || !newCompFileTree?.length) return undefined;
+    return newCompFileTree.map((n: string) => ({ name: n, status: 'NEW' }));
+  }, [loading, newCompFileTree]);
+
+  useFileRegistryRegister(compareId.split('@')[0], registryFiles);
+
+  return null;
+}
+
+export type ComponentCompareHeaderProps = {
+  name: string;
+  /** component id (without version) — used to look up any per-view header notes registered for it */
+  componentId?: string;
+  envIcon?: string;
+  baseVersion?: string;
+  compareVersion?: string;
+  baseUrl?: string;
+  compareUrl?: string;
+  changeTags?: Array<{ label: string; color: string }>;
+};
+
+/**
+ * Renders any per-view header notes a view registered for this component (e.g. the deps view's
+ * change tally). Fully view-agnostic: it stamps `data-header-extra-view` and the app reveals the note
+ * for the matching active view via CSS, so this header never names or knows about any specific view.
+ */
+function CompareHeaderExtras({ componentId }: { componentId?: string }) {
+  const registry = useFileRegistry();
+  const extras = componentId ? registry?.getHeaderExtras(componentId) : undefined;
+  if (!extras || extras.length === 0) return null;
+  return (
+    <>
+      {extras.map(({ view, text }) => (
+        <span key={view} className={styles.headerExtra} data-header-extra-view={view}>
+          {text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+export function ComponentCompareHeader({
+  name,
+  componentId,
+  envIcon,
+  baseVersion,
+  compareVersion,
+  baseUrl,
+  compareUrl,
+  changeTags,
+}: ComponentCompareHeaderProps) {
+  return (
+    <div className={styles.header}>
+      <div className={styles.headerLeft}>
+        {envIcon ? (
+          <img src={envIcon} className={styles.envIcon} alt="" />
+        ) : (
+          <span className={styles.envIconPlaceholder} />
+        )}
+        <span className={styles.componentName}>{name}</span>
+      </div>
+      <div className={styles.headerRight}>
+        <CompareHeaderExtras componentId={componentId} />
+        {changeTags && changeTags.length > 0 && (
+          <div className={styles.changeTags}>
+            {changeTags.map((t) => (
+              <span key={t.label} className={styles.changeTag} style={{ color: t.color, background: `${t.color}14` }}>
+                {t.label}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className={styles.versions}>
+          {baseVersion &&
+            (baseUrl ? (
+              <a className={styles.versionHash} href={baseUrl} target="_blank" rel="noopener noreferrer">
+                {baseVersion}
+              </a>
+            ) : (
+              <span className={styles.versionHash}>{baseVersion}</span>
+            ))}
+          {baseVersion && compareVersion && <span className={styles.versionArrow}>→</span>}
+          {compareVersion &&
+            (compareUrl ? (
+              <a className={styles.versionHash} href={compareUrl} target="_blank" rel="noopener noreferrer">
+                {compareVersion}
+              </a>
+            ) : (
+              <span className={styles.versionHash}>{compareVersion}</span>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineSkeleton({ lines = 3, className }: { lines?: number; className?: string }) {
+  return (
+    <div className={classnames(styles.skeleton, className)}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className={styles.skeletonBar} style={{ width: `${40 + (i % 3) * 20}%` }} />
+      ))}
+    </div>
+  );
+}
+
+/** registers one component's bulk compare data into the FileRegistry. renders nothing. */
+function CompareRegistryEntry({ compareId }: { compareId: string }) {
+  const compareData = useCompareData();
+  const data: CompareComponentData | null | undefined = compareData?.compareDataFor(compareId);
+  const componentIdStr = compareId.split('@')[0];
+
+  // `data` undefined = the bulk page is still loading → register nothing (keep any prior entry). `data`
+  // null = the pair failed or paging terminated before reaching it → register an empty list so a stale
+  // file tree from a previous comparison is cleared rather than left behind in the sidebar registry.
+  const registryFiles = useMemo(() => {
+    if (data === undefined) return undefined;
+    if (data === null) return [];
+    return (data.code || [])
+      .filter((f) => f.status !== 'UNCHANGED')
+      .map((f) => ({ name: f.fileName, status: f.status }));
+  }, [data]);
+
+  const aspectRegistryFiles = useMemo(() => {
+    if (data === undefined) return undefined;
+    if (data === null) return [];
+    return (data.aspects || []).map((a) => ({ name: a.fieldName, status: 'MODIFIED' }));
+  }, [data]);
+
+  useFileRegistryRegister(componentIdStr, registryFiles);
+  useAspectRegistryRegister(componentIdStr, aspectRegistryFiles);
+
+  return null;
+}
+
+/**
+ * feeds the FileRegistry from the bulk `CompareDataProvider` for every component pair that has a base.
+ * renders one null-rendering `CompareRegistryEntry` per pair — no per-component queries are fired.
+ */
+export function RegistryFeeder({ pairs }: { pairs: ComponentComparePair[] }) {
+  return (
+    <>
+      {pairs.map((pair) => (
+        <CompareRegistryEntry key={pair.compareId} compareId={pair.compareId} />
+      ))}
+    </>
+  );
+}

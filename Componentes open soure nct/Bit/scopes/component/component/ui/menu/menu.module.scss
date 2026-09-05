@@ -1,0 +1,193 @@
+@import '@teambit/base-ui.layout.breakpoints/_breakpoints.scss';
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.topBarMinimal {
+  @media screen and (max-width: $br-md) {
+    // The breadcrumb owns the remaining mobile space, while this menu keeps the intrinsic width
+    // of its pinned actions and right-side controls.
+    flex: 0 0 auto;
+    width: auto;
+
+    // Pinned actions already include their own touch-target spacing, so the desktop gutter before
+    // version controls is unnecessary here and can be returned to the component breadcrumb.
+    .rightSide {
+      padding-left: 0;
+
+      // Keep the established nested right-side structure for non-minimal consumers, including
+      // custom RightNode integrations, but remove its extra layout box where mobile space is scarce.
+      > .rightSide {
+        display: contents;
+      }
+    }
+  }
+}
+
+.leftSide {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.leftSideMinimal {
+  @media screen and (max-width: $br-md) {
+    // The compact More menu owns its intrinsic width; pinned actions follow as siblings.
+    flex: 0 0 auto;
+  }
+}
+
+.minimalMoreNav {
+  display: none;
+
+  @media screen and (max-width: $br-md) {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+}
+
+.minimalMoreButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--bit-bg-heavy);
+  }
+
+  > img {
+    width: 16px;
+  }
+}
+
+.minimalMenuItem {
+  padding: 0;
+
+  > * {
+    width: 100%;
+  }
+}
+
+.hideMinimalMobileNav {
+  @media screen and (max-width: $br-md) {
+    display: none;
+  }
+}
+
+.navigation {
+  list-style: none;
+  height: 100%;
+  padding-left: 28px;
+  @media screen and (max-width: $br-md) {
+    padding-left: 0;
+  }
+
+  li {
+    display: block;
+    margin-right: 16px;
+    height: 100%;
+  }
+
+  // show desktop nav on larger res
+  &.desktopNav {
+    display: flex;
+    @media screen and (max-width: $br-md) {
+      display: none;
+    }
+  }
+
+  // show mobile nav on smaller res
+  &.mobileNav {
+    align-items: center;
+    display: none;
+    @media screen and (max-width: $br-lg) {
+      display: flex;
+      margin-right: 8px;
+    }
+  }
+}
+
+.rightSide {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-left: 16px;
+
+  > * {
+    margin-right: 12px;
+  }
+
+  @media screen and (max-width: $br-lg) {
+    > * {
+      margin-right: 8px;
+    }
+  }
+  .widget {
+    font-size: 17px;
+  }
+}
+
+.useBox,
+.versionDropdown {
+  --bit-drawer-margin: 10px;
+}
+
+.componentVersionMenu {
+  width: 500px;
+}
+.componentVersionMenuWorkspace {
+  width: 350px;
+}
+
+.tab {
+  > div {
+    color: var(--on-background-color, #2b2b2b);
+    padding: 0;
+  }
+}
+.topBarNav {
+  height: 100%;
+
+  &.noBorder::after {
+    display: none;
+  }
+}
+
+// The component top bar packs left-side nav (Overview, Code, Tests, Preview …) and right-side
+// dropdowns (Use package, Versions, Workspace) on the same row. Below `$br-lg` the right side
+// takes so much horizontal space that the ResponsiveNavbar collapses every nav tab into the
+// overflow "more" dropdown — which is what produces the "…" the user sees instead of tabs.
+// Hiding the Use-package dropdown earlier (at < lg, not < md) reclaims the room so the nav
+// stays visible on tablet viewports too. Users on mobile can still copy the install command
+// from the dedicated "Use package" panel that the docs overview renders inline.
+.hideOnMobile {
+  @media screen and (max-width: $br-lg) {
+    display: none;
+  }
+}
+
+.useBoxContainer {
+  width: 500px !important;
+  border: 1px solid var(--border-medium-color, #ededed);
+
+  // Mobile: cap to viewport width, drop fixed pixel width, scroll horizontally if a tab title
+  // (or the install snippet) is wider. Without this the 500px container overflows past the
+  // viewport edge, which is why the second consume-method tab and the package-name snippet were
+  // both truncating to "…".
+  @media screen and (max-width: $br-md) {
+    width: calc(100vw - 24px) !important;
+    max-width: 500px;
+  }
+}

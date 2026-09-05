@@ -1,0 +1,206 @@
+import type { Logger } from '@teambit/logger';
+import { resolve } from 'path';
+import type {
+  EnvService,
+  ExecutionContext,
+  EnvDefinition,
+  Env,
+  EnvContext,
+  ServiceTransformationMap,
+} from '@teambit/envs';
+import { ComponentMap } from '@teambit/component';
+import { pathNormalizeToLinux } from '@teambit/toolbox.path.path';
+import type { Workspace } from '@teambit/workspace';
+import highlight from 'cli-highlight';
+import type { PubSubEngine } from 'graphql-subscriptions';
+import type { DevFilesMain } from '@teambit/dev-files';
+import type { Tester, CallbackFn } from './tester';
+import { Tests } from './tester';
+import { TesterAspect } from './tester.aspect';
+import type { TesterOptions } from './tester.main.runtime';
+import { detectTestFiles } from './utils';
+
+const chalk = require('chalk');
+
+export const OnTestsChanged = 'OnTestsChanged';
+
+type TesterTransformationMap = ServiceTransformationMap & {
+  getTester: () => Tester;
+};
+
+export type TesterDescriptor = {
+  /**
+   * id of the tester (e.g. jest/mocha)
+   */
+  id: string;
+
+  /**
+   * display name of the tester (e.g. Jest / Mocha)
+   */
+  displayName: string;
+
+  /**
+   * icon of the configured tester.
+   */
+  icon: string;
+
+  /**
+   * string containing the config for display.
+   */
+  config: string;
+
+  version?: string;
+};
+
+export class TesterService implements EnvService<Tests, TesterDescriptor> {
+  name = 'tester';
+
+  constructor(
+    readonly workspace: Workspace,
+
+    private logger: Logger,
+
+    private pubsub: PubSubEngine,
+
+    private devFiles: DevFilesMain
+  ) {}
+
+  _callback: CallbackFn | undefined;
+
+  render(env: EnvDefinition) {
+    const descriptor = this.getDescriptor(env);
+    const name = `${chalk.green('configured tester:')} ${descriptor?.id} (${descriptor?.displayName} @ ${
+      descriptor?.version
+    })`;
+    const configLabel = chalk.green('tester config:');
+    const configObj = descriptor?.config
+      ? highlight(descriptor?.config, { language: 'javascript', ignoreIllegals: true })
+      : '';
+    return `${name}\n${configLabel}\n${configObj}`;
+  }
+
+  getDescriptor(environment: EnvDefinition) {
+    if (!environment.env.getTester) return undefined;
+    const tester: Tester = environment.env.getTester();
+
+    return {
+      id: tester.id || '',
+      displayName: tester.displayName || '',
+      icon: tester.icon || '',
+      config: tester.displayConfig ? tester.displayConfig() : '',
+      version: tester.version ? tester.version() : '?',
+    };
+  }
+
+  transform(env: Env, context: EnvContext): TesterTransformationMap | undefined {
+    // Old env
+    if (!env?.tester) return undefined;
+
+    return {
+      getTester: () => env.tester()(context),
+    };
+  }
+
+  onTestRunComplete(callback: CallbackFn) {
+    this._callback = callback;
+  }
+
+  async run(context: ExecutionContext, options: TesterOptions): Promise<Tests> {
+    if (!context.env.getTester) {
+      return new Tests([]);
+    }
+    const tester: Tester = context.env.getTester();
+    // when specific test files were requested (e.g. `bit test path/to/comp.spec.ts`), run only them.
+    const requestedTestFiles = options.testFiles?.map((filePath) => pathNormalizeToLinux(filePath));
+    const allSpecFiles = ComponentMap.as(context.components, (component) => {
+      const files = detectTestFiles(component, this.devFiles);
+      if (!requestedTestFiles?.length) return files;
+      return files.filter((file) => requestedTestFiles.includes(pathNormalizeToLinux(file.path)));
+    });
+    // drop components with zero spec files before handing them to the tester — otherwise testers
+    // like Mocha invoke their reporter once per component and print "0 passing (0ms)" noise.
+    const specFiles = allSpecFiles.filter((files) => files.length > 0);
+    const componentWithTests = specFiles.toArray().length;
+
+    if (componentWithTests === 0 && !options.ui) {
+      // silent: the final summary in `bit test` collapses no-test components into a single line.
+      return new Tests([]);
+    }
+
+    if (!options.ui)
+      this.logger.console(`testing ${componentWithTests} components with environment ${chalk.cyan(context.id)}\n`);
+
+    const patterns = await ComponentMap.asAsync(context.components, async (component) => {
+      const componentDir = this.workspace.componentDir(component.id);
+      const componentPatterns = this.devFiles.getDevPatterns(component, TesterAspect.id);
+      const packageRootDir = await this.workspace.getComponentPackagePath(component);
+
+      const getPaths = () => {
+        if (requestedTestFiles?.length) {
+          // pass the exact requested spec files to the tester instead of the dev patterns, so testers
+          // such as Jest (which relies on the patterns rather than on specFiles) run only these files.
+          const matchedSpecFiles = specFiles.getValueByComponentId(component.id) || [];
+          return matchedSpecFiles.map((file) => ({ path: file.path, relative: file.relative }));
+        }
+        return componentPatterns.map((pattern: string) => ({
+          path: resolve(componentDir, pattern),
+          relative: pattern,
+        }));
+      };
+
+      return {
+        componentDir,
+        packageRootDir,
+        paths: getPaths(),
+      };
+    });
+
+    let additionalHostDependencies = [];
+    if (
+      context.env.getAdditionalTestHostDependencies &&
+      typeof context.env.getAdditionalTestHostDependencies === 'function'
+    ) {
+      additionalHostDependencies = await context.env.getAdditionalTestHostDependencies();
+    }
+
+    const testerContext = Object.assign(context, {
+      release: false,
+      specFiles,
+      patterns,
+      sourcePatterns: patterns,
+      rootPath: this.workspace.path,
+      workspace: this.workspace,
+      debug: options.debug,
+      watch: options.watch,
+      ui: options.ui,
+      coverage: options.coverage,
+      updateSnapshot: options.updateSnapshot,
+      additionalHostDependencies,
+    });
+
+    if (options.watch && options.ui && tester.watch) {
+      if (tester.onTestRunComplete) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        tester.onTestRunComplete((results) => {
+          if (this._callback) this._callback(results);
+          results.components.forEach((component) => {
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            this.pubsub.publish(OnTestsChanged, {
+              testsChanged: {
+                id: component.componentId.toString(),
+                testsResults: component.results,
+                loading: component.loading,
+              },
+            });
+          });
+        });
+      }
+
+      return tester.watch(testerContext);
+    }
+
+    const results = await tester.test(testerContext);
+
+    return results;
+  }
+}

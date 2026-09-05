@@ -1,0 +1,84 @@
+.envsFilterContainer {
+  > div {
+    line-height: 16px;
+    display: flex;
+  }
+
+  .filterIcon {
+    display: flex;
+    padding: 8px;
+    border-radius: 8px;
+
+    &:hover {
+      background: var(--bit-bg-heavy, #f6f6f6);
+      cursor: pointer;
+    }
+
+    img {
+      width: 16px;
+      filter: invert(44%) sepia(7%) saturate(560%) hue-rotate(187deg) brightness(96%) contrast(91%);
+    }
+
+    .filterIconLabel {
+      margin: 0px 8px;
+      font-size: 14px;
+    }
+
+    .dropdownArrow {
+      display: flex;
+    }
+  }
+}
+
+.envFilterDropdown {
+  width: 300px;
+}
+.dropdownContent {
+  overflow: auto;
+  max-height: 30vh;
+}
+
+.doneButton {
+  transition: none;
+}
+
+.envDropdownItemContainer {
+  display: flex;
+  width: calc(100% - 24px);
+  align-items: baseline;
+  flex-direction: column;
+}
+
+.envDropdownItemIconContainer {
+  display: flex;
+  height: 16px;
+  width: 16px;
+}
+
+.envDropdownItem {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: var(--bit-p-md, 16px);
+}
+
+.envDropdownItemIcon {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 8px;
+}
+
+.description {
+  font-size: var(--bit-p-xs, 14px);
+  color: var(--bit-text-color-light, #6c707c);
+  width: calc(100% - 24px);
+}
+
+.descriptionText {
+  width: 100%;
+}
+
+.envLink {
+  color: white;
+  text-decoration: none;
+}

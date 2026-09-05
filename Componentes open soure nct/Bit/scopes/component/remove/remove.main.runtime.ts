@@ -1,0 +1,698 @@
+import type { CLIMain } from '@teambit/cli';
+import { CLIAspect, MainRuntime, formatSection, formatItem } from '@teambit/cli';
+import semver from 'semver';
+import type { Logger, LoggerMain } from '@teambit/logger';
+import { LoggerAspect } from '@teambit/logger';
+import type { Workspace } from '@teambit/workspace';
+import { WorkspaceAspect, OutsideWorkspaceError } from '@teambit/workspace';
+import { ComponentID, ComponentIdList } from '@teambit/component-id';
+import { ConsumerNotFound } from '@teambit/legacy.consumer';
+import type { ImporterMain } from '@teambit/importer';
+import { ImporterAspect } from '@teambit/importer';
+import { compact } from 'lodash';
+import { hasWildcard } from '@teambit/legacy.utils';
+import { BitError } from '@teambit/bit-error';
+import type { DependencyResolverMain, WorkspacePolicyEntry } from '@teambit/dependency-resolver';
+import { DependencyResolverAspect } from '@teambit/dependency-resolver';
+import { IssuesClasses } from '@teambit/component-issues';
+import type { IssuesMain } from '@teambit/issues';
+import { IssuesAspect } from '@teambit/issues';
+import pMapSeries from 'p-map-series';
+import { NoHeadNoVersion } from '@teambit/legacy.scope';
+import type { Component, ComponentMain } from '@teambit/component';
+import { ComponentAspect } from '@teambit/component';
+import { deleteComponentsFiles } from './delete-component-files';
+import { RemoveCmd } from './remove-cmd';
+import type { RemoveComponentsResult } from './remove-components';
+import { removeComponents, removeComponentsFromNodeModules } from './remove-components';
+import { RemoveAspect } from './remove.aspect';
+import { RemoveFragment } from './remove.fragment';
+import type { RecoverOptions } from './recover-cmd';
+import { RecoverCmd } from './recover-cmd';
+import { DeleteCmd } from './delete-cmd';
+import type { ScopeMain } from '@teambit/scope';
+import { ScopeAspect } from '@teambit/scope';
+import type { ListerMain } from '@teambit/lister';
+import { ListerAspect } from '@teambit/lister';
+import chalk from 'chalk';
+
+const BEFORE_REMOVE = 'removing components';
+
+export type RemoveInfo = {
+  removed: boolean;
+  /**
+   * whether to remove the component from default lane once merged
+   */
+  removeOnMain?: boolean;
+  /**
+   * Semver range to mark specific versions as deleted
+   */
+  range?: string;
+  /**
+   * Array of snap hashes to mark as deleted
+   */
+  snaps?: string[];
+};
+
+export type DeleteOpts = { updateMain?: boolean; range?: string; snaps?: string[] };
+
+export class RemoveMain {
+  constructor(
+    private workspace: Workspace,
+    private scope: ScopeMain,
+    public logger: Logger,
+    private importer: ImporterMain,
+    private depResolver: DependencyResolverMain,
+    private lister: ListerMain
+  ) {}
+
+  async remove({
+    componentsPattern,
+    force = false,
+    remote = false,
+    track = false,
+    deleteFiles = true,
+  }: {
+    componentsPattern: string;
+    force?: boolean;
+    remote?: boolean;
+    track?: boolean;
+    deleteFiles?: boolean;
+  }): Promise<RemoveComponentsResult> {
+    this.logger.setStatusLine(BEFORE_REMOVE);
+    const bitIds = remote
+      ? await this.getRemoteBitIdsToRemove(componentsPattern)
+      : await this.getLocalBitIdsToRemove(componentsPattern);
+    this.logger.setStatusLine(BEFORE_REMOVE); // again because the loader might changed when talking to the remote
+    const consumer = this.workspace?.consumer;
+    const removeResults = await removeComponents({
+      workspace: this.workspace,
+      ids: ComponentIdList.fromArray(bitIds),
+      force,
+      remote,
+      track,
+      deleteFiles,
+    });
+    if (consumer) await consumer.onDestroy('remove');
+    return removeResults;
+  }
+
+  /**
+   * remove components from the workspace.
+   */
+  async removeLocallyByIds(
+    ids: ComponentID[],
+    { force = false, reasonForRemoval }: { force?: boolean; reasonForRemoval?: string } = {}
+  ) {
+    if (!this.workspace) throw new OutsideWorkspaceError();
+    const results = await removeComponents({
+      workspace: this.workspace,
+      ids: ComponentIdList.fromArray(ids),
+      force,
+      remote: false,
+      track: false,
+      deleteFiles: true,
+    });
+    await this.workspace.bitMap.write(`remove (by ${reasonForRemoval || 'N/A'})`);
+
+    return results;
+  }
+
+  private async markRemoveComps(
+    componentIds: ComponentID[],
+    { updateMain, range, snaps }: DeleteOpts
+  ): Promise<Component[]> {
+    const allComponentsToMarkDeleted = await this.workspace.getMany(componentIds);
+
+    const componentsToDeleteFromFs = range || snaps ? [] : allComponentsToMarkDeleted;
+    const componentsIdsToDeleteFromFs = ComponentIdList.fromArray(componentsToDeleteFromFs.map((c) => c.id));
+    await removeComponentsFromNodeModules(
+      this.workspace.consumer,
+      componentsToDeleteFromFs.map((c) => c.state._consumer)
+    );
+    // don't use `this.workspace.addSpecificComponentConfig`, if the component has component.json it will be deleted
+    // during this removal along with the entire component dir.
+    // in case this is range, the "removed" property is set to false. even when the range overlap the current version.
+    // the reason is that if we set it to true, then, the component is considered as "deleted" for *all* versions.
+    // remember that this config is always passed to the next version and if we set removed: true, it'll be copied
+    // to the next version even when that version is not in the range.
+    const config: RemoveInfo = { removed: !(range || snaps) };
+    if (updateMain) config.removeOnMain = true;
+    if (range) config.range = range;
+    if (snaps && snaps.length) config.snaps = snaps;
+    componentIds.forEach((compId) => this.workspace.bitMap.addComponentConfig(compId, RemoveAspect.id, config));
+    await this.workspace.bitMap.write('delete');
+    await deleteComponentsFiles(this.workspace.consumer, componentsIdsToDeleteFromFs);
+
+    return componentsToDeleteFromFs;
+  }
+
+  async deleteComps(componentsPattern: string, opts: DeleteOpts = {}): Promise<Component[]> {
+    if (!this.workspace) throw new ConsumerNotFound();
+    const componentIds = await this.workspace.idsByPattern(componentsPattern);
+    const newComps = componentIds.filter((id) => !id.hasVersion());
+    if (newComps.length) {
+      throw new BitError(
+        `no need to delete the following new component(s), please remove them by "bit remove"\n${newComps
+          .map((id) => id.toString())
+          .join('\n')}`
+      );
+    }
+    const currentLane = await this.workspace.getCurrentLaneObject();
+    const { updateMain } = opts;
+    if (!updateMain && currentLane?.isNew) {
+      throw new Error(
+        'no need to delete components from an un-exported lane, you can remove them by running "bit remove"'
+      );
+    }
+    if (currentLane && !updateMain && opts.range) {
+      throw new BitError(`--range is not needed when deleting components from a lane, unless --update-main is used`);
+    }
+    if (currentLane && !updateMain) {
+      const laneComp = currentLane.toComponentIds();
+      const compIdsNotOnLane = componentIds.filter((id) => !laneComp.hasWithoutVersion(id));
+      if (compIdsNotOnLane.length) {
+        throw new BitError(
+          `unable to delete the following component(s) because they are not part of the current lane.
+${chalk.bold(compIdsNotOnLane.map((id) => id.toString()).join('\n'))}
+to simply remove them from the workspace, use "bit remove".
+to delete them eventually from main, use "--update-main" flag and make sure to remove all occurrences from the code.`
+        );
+      }
+    }
+
+    // when soft-deleting from a lane, components that still have dependents in the workspace will keep
+    // referencing the now-deleted lane snap version (0.0.0-<hash>), which was never published to the registry.
+    // to avoid a "No matching version found" error on the next "bit install", pin those components to their
+    // main (published) version in the workspace policy - mirroring what running "bit install <pkg>" does manually.
+    // this must be computed before the removal so the dependency graph is still intact.
+    const isLaneSoftDelete = Boolean(currentLane) && !updateMain && !opts.range && !opts.snaps;
+    // best-effort: never let this convenience break the actual deletion. on failure the user can still
+    // recover via the manual "bit install <pkg>" workaround.
+    const depsToPinToMain = isLaneSoftDelete
+      ? await this.getDeletedDepsToPinToMain(componentIds).catch((err) => {
+          this.logger.warn(`getDeletedDepsToPinToMain failed: ${err.message}`);
+          return [];
+        })
+      : [];
+
+    const removedComps = await this.markRemoveComps(componentIds, opts);
+
+    if (depsToPinToMain.length) {
+      await this.pinDepsToMainInWorkspacePolicy(depsToPinToMain).catch((err) => {
+        this.logger.warn(`pinDepsToMainInWorkspacePolicy failed: ${err.message}`);
+      });
+    }
+
+    return removedComps;
+  }
+
+  /**
+   * out of the given deleted ids, build workspace-policy entries pinning to the latest tagged version on main,
+   * for those that still have at least one dependent in the workspace (excluding other components being deleted
+   * in the same operation). the version is resolved locally from the scope (no network), so "bit delete" stays
+   * a fast, offline-capable, local operation.
+   * only a tagged (published) main version is used. a component with no tag on main (only snaps, or it only ever
+   * existed on the lane) is skipped - pinning a snap version would re-introduce the "No matching version" failure
+   * this feature is meant to prevent, since snaps aren't fetchable as a regular registry package.
+   * envs are excluded on purpose: a deleted env surfaces as a "RemovedEnv" issue so the user can replace it
+   * explicitly (bit env replace), and we don't want to silently pin it to its main version and suppress that
+   * signal. only regular dependencies (e.g. a dependency of an env) need pinning so they install from main.
+   */
+  private async getDeletedDepsToPinToMain(deletedIds: ComponentID[]): Promise<WorkspacePolicyEntry[]> {
+    const graph = await this.workspace.getGraphIds(undefined, false);
+    const deletedIdList = ComponentIdList.fromArray(deletedIds);
+    const idsWithDependents = deletedIds.filter((id) => {
+      const dependents = graph.predecessors(id.toString(), {
+        nodeFilter: (node) => this.workspace.hasId(node.attr) && !deletedIdList.hasWithoutVersion(node.attr),
+      });
+      return dependents.length > 0;
+    });
+    if (!idsWithDependents.length) return [];
+    const isEnvFlags = await Promise.all(idsWithDependents.map((id) => this.isEnvByIdWithoutLoadingComponent(id)));
+    const nonEnvIds = idsWithDependents.filter((_id, index) => !isEnvFlags[index]);
+    if (!nonEnvIds.length) return [];
+    const comps = await this.workspace.getMany(nonEnvIds);
+    const entries = await Promise.all(
+      comps.map(async (comp): Promise<WorkspacePolicyEntry | undefined> => {
+        const modelComponent = await this.workspace.scope.getBitObjectModelComponent(comp.id.changeVersion(undefined));
+        // the latest tagged version on main. undefined means there's no published release on main to pin to.
+        const mainVersion = modelComponent?.latestVersionIfExist();
+        if (!mainVersion) return undefined;
+        const versionWithPrefix = this.depResolver.getVersionWithSavePrefix({ version: mainVersion });
+        return {
+          dependencyId: this.depResolver.getPackageName(comp),
+          value: { version: versionWithPrefix },
+          lifecycleType: 'runtime',
+        };
+      })
+    );
+    return compact(entries);
+  }
+
+  /**
+   * add the given (deleted-on-lane) policy entries to the workspace policy, so their dependents install them
+   * from the registry (their main version) instead of the non-published lane snap version.
+   */
+  private async pinDepsToMainInWorkspacePolicy(entries: WorkspacePolicyEntry[]): Promise<void> {
+    // skipIfExisting so we never override a version the user already set explicitly in the workspace policy.
+    this.depResolver.addToRootPolicy(entries, { skipIfExisting: true });
+    await this.depResolver.persistConfig('delete (pin deleted-on-lane deps to main)');
+    const items = entries.map((entry) => formatItem(`${entry.dependencyId}@${entry.value.version}`));
+    this.logger.console(
+      formatSection(
+        'pinned deleted components to their main version',
+        'these components were deleted from the lane but still have dependents in the workspace, so they were added to the workspace policy to be installed from main',
+        items
+      )
+    );
+  }
+
+  /**
+   * recover soft-removed component(s) matching a pattern.
+   * supports component patterns (e.g., "comp1", "org.scope/*", etc.)
+   * returns array of recovered component IDs
+   */
+  async recover(pattern: string, options: RecoverOptions): Promise<ComponentID[]> {
+    if (!this.workspace) throw new ConsumerNotFound();
+
+    const componentsToRecover = await this.getComponentsToRecover(pattern);
+    if (componentsToRecover.length === 0) {
+      return [];
+    }
+
+    // Classify components by recovery scenario
+    const componentsToProcess = await Promise.all(
+      componentsToRecover.map((compId) => this.classifyComponentForRecovery(compId))
+    );
+
+    // Collect all components that need importing
+    const idsToImport = componentsToProcess
+      .filter((item) => item.action === 'import' || item.action === 'deleteConfigAndImport')
+      .map((item) => item.idToImport!);
+
+    // Import all at once for better performance
+    if (idsToImport.length > 0) {
+      await this.importer.import({
+        ids: idsToImport,
+        installNpmPackages: !options.skipDependencyInstallation,
+        writeConfigFiles: !options.skipWriteConfigFiles,
+        override: true,
+      });
+    }
+
+    // Process each component according to its classification
+    for (const item of componentsToProcess) {
+      if (!item.shouldRecover) continue;
+
+      if (item.action === 'writeFromScope') {
+        // Case #1a: write from local scope and remove the "removed" config
+        const compFromScope = await this.workspace.scope.get(item.bitMapEntry!.id);
+        if (compFromScope) {
+          await this.workspace.write(compFromScope, item.bitMapEntry!.rootDir);
+          this.workspace.bitMap.removeComponentConfig(item.bitMapEntry!.id, RemoveAspect.id, false);
+        }
+      } else if (item.action === 'deleteConfigAndImport') {
+        // Case #1b: delete config entry before import
+        delete item.bitMapEntry!.config?.[RemoveAspect.id];
+      } else {
+        // Cases #2, #3, #4, #5: set removed: false
+        await this.workspace.addSpecificComponentConfig(item.compId, RemoveAspect.id, { removed: false });
+      }
+    }
+
+    // Write bitmap once at the end
+    await this.workspace.bitMap.write('recover');
+
+    return componentsToRecover.filter((_, idx) => componentsToProcess[idx].shouldRecover);
+  }
+
+  /**
+   * Classify a component to determine how it should be recovered.
+   * This implements the 5 different recovery scenarios.
+   */
+  private async classifyComponentForRecovery(compId: ComponentID): Promise<{
+    compId: ComponentID;
+    shouldRecover: boolean;
+    action: 'writeFromScope' | 'deleteConfigAndImport' | 'updateConfig' | 'import' | 'none';
+    bitMapEntry?: any;
+    idToImport?: string;
+  }> {
+    if (!this.workspace) throw new ConsumerNotFound();
+
+    const bitMapEntry = this.workspace.bitMap.getBitmapEntryIfExist(compId, { ignoreVersion: true });
+
+    // Case #1: Component in .bitmap with "removed" aspect entry
+    if (bitMapEntry?.config?.[RemoveAspect.id]) {
+      const compFromScope = await this.workspace.scope.get(bitMapEntry.id);
+      if (compFromScope) {
+        // Case #1a: exists in local scope - write from there
+        return {
+          compId: bitMapEntry.id,
+          shouldRecover: true,
+          action: 'writeFromScope',
+          bitMapEntry,
+        };
+      }
+      // Case #1b: not in local scope - import it
+      return {
+        compId: bitMapEntry.id,
+        shouldRecover: true,
+        action: 'deleteConfigAndImport',
+        bitMapEntry,
+        idToImport: bitMapEntry.id.toString(),
+      };
+    }
+
+    // Case #4: Component in .bitmap without "removed" aspect entry
+    if (bitMapEntry) {
+      const comp = await this.workspace.get(compId);
+      const removeInfo = await this.getRemoveInfo(comp);
+      if (!removeInfo.removed && !removeInfo.range && !removeInfo.snaps) {
+        return { compId, shouldRecover: false, action: 'none' };
+      }
+      return {
+        compId,
+        shouldRecover: true,
+        action: 'updateConfig',
+      };
+    }
+
+    // Cases #2, #3, #5: Component not in .bitmap
+    const currentLane = await this.workspace.getCurrentLaneObject();
+    const idOnLane = currentLane?.getComponent(compId);
+    const compIdWithPossibleVer = idOnLane ? compId.changeVersion(idOnLane.head.toString()) : compId;
+    const compFromScope = await this.workspace.scope.get(compIdWithPossibleVer);
+
+    if (compFromScope && (await this.isDeleted(compFromScope))) {
+      // Cases #2 and #3: soft-removed and snapped/exported
+      return {
+        compId: compIdWithPossibleVer,
+        shouldRecover: true,
+        action: 'import',
+        idToImport: compIdWithPossibleVer._legacy.toString(),
+      };
+    }
+
+    // Case #5: workspace is empty, component on remote
+    let comp: Component | undefined;
+    try {
+      comp = await this.workspace.scope.getRemoteComponent(compId);
+    } catch (err: any) {
+      if (err instanceof NoHeadNoVersion) {
+        throw new BitError(
+          `unable to find the component ${compIdWithPossibleVer.toString()} in the current lane or main`
+        );
+      }
+      throw err;
+    }
+    if (!(await this.isDeleted(comp))) {
+      return { compId, shouldRecover: false, action: 'none' };
+    }
+    return {
+      compId,
+      shouldRecover: true,
+      action: 'import',
+      idToImport: compId._legacy.toString(),
+    };
+  }
+
+  /**
+   * get all components matching the pattern that are soft-removed and can be recovered
+   */
+  private async getComponentsToRecover(pattern: string): Promise<ComponentID[]> {
+    if (!this.workspace) throw new ConsumerNotFound();
+
+    // Check if pattern contains wildcards
+    if (hasWildcard(pattern)) {
+      // Get all soft-removed components from different sources
+      const locallySoftRemoved = this.workspace.consumer.bitMap.getRemoved();
+      const componentsList = this.workspace.componentList;
+      const remotelySoftRemoved = await componentsList.listRemotelySoftRemoved();
+      const remotelySoftRemovedIds = remotelySoftRemoved.map((c) => c.componentId);
+
+      // Also check components on the current lane that might be soft-removed
+      const removedStaged = await this.getRemovedStaged();
+
+      // Combine all soft-removed components
+      const allSoftRemoved = [...locallySoftRemoved, ...remotelySoftRemovedIds, ...removedStaged];
+
+      // Use the same pattern matching logic as filterIdsFromPoolIdsByPattern
+      const matches = await this.workspace.scope.filterIdsFromPoolIdsByPattern(pattern, allSoftRemoved, false);
+
+      return ComponentIdList.uniqFromArray(matches);
+    }
+
+    // Single component - try to resolve it
+    const bitMapEntry = this.workspace.consumer.bitMap.components.find((compMap) => {
+      return compMap.id.fullName === pattern || compMap.id.toStringWithoutVersion() === pattern;
+    });
+    if (bitMapEntry) {
+      return [bitMapEntry.id];
+    }
+    const compId = await this.workspace.scope.resolveComponentId(pattern);
+    return [compId];
+  }
+
+  private async throwForMainComponentWhenOnLane(components: Component[]) {
+    const currentLane = await this.workspace.getCurrentLaneObject();
+    if (!currentLane) return; // user on main
+    const laneComps = currentLane.toBitIds();
+    const mainComps = components.filter((comp) => !laneComps.hasWithoutVersion(comp.id));
+    if (mainComps.length) {
+      throw new BitError(`the following components belong to main, they cannot be soft-removed when on a lane. consider removing them without --soft.
+${mainComps.map((c) => c.id.toString()).join('\n')}`);
+    }
+  }
+
+  async getRemoveInfo(component: Component): Promise<RemoveInfo> {
+    const headComponent = await this.getHeadComponent(component);
+    const data = headComponent.config.extensions.findExtension(RemoveAspect.id)?.config as RemoveInfo | undefined;
+
+    const isDeletedByRange = () => {
+      if (!data?.range) return false;
+      const currentTag = component.getTag();
+      return Boolean(currentTag && semver.satisfies(currentTag.version, data.range));
+    };
+    const isDeletedBySnaps = () => {
+      if (!data?.snaps || !component.id.version) return false;
+      return data.snaps.includes(component.id.version);
+    };
+
+    return {
+      removed: data?.removed || isDeletedByRange() || isDeletedBySnaps() || false,
+      range: data?.range,
+      snaps: data?.snaps,
+    };
+  }
+
+  private async getHeadComponent(component: Component): Promise<Component> {
+    if (
+      component.id.version &&
+      component.head &&
+      component.id.version !== component.head?.hash &&
+      component.id.version !== component.headTag?.version.version
+    ) {
+      const headComp = this.workspace // if workspace exits, prefer using the workspace as it may be modified
+        ? await this.workspace.get(component.id.changeVersion(undefined))
+        : await this.scope.get(component.id.changeVersion(component.head.hash));
+      if (!headComp) throw new Error(`unable to get the head of ${component.id.toString()}`);
+      return headComp;
+    }
+    return component;
+  }
+
+  /**
+   * @deprecated use `isDeleted` instead.
+   */
+  async isRemoved(component: Component): Promise<boolean> {
+    return this.isDeleted(component);
+  }
+
+  /**
+   * whether a component is marked as deleted.
+   */
+  async isDeleted(component: Component): Promise<boolean> {
+    const removeInfo = await this.getRemoveInfo(component);
+    return removeInfo.removed;
+  }
+
+  /**
+   * performant version of isRemoved() in case the component object is not available and loading it is expensive.
+   */
+  async isRemovedByIdWithoutLoadingComponent(componentId: ComponentID): Promise<boolean> {
+    if (!componentId.hasVersion()) return false;
+    const bitmapEntry = this.workspace.bitMap.getBitmapEntryIfExist(componentId);
+    if (bitmapEntry && bitmapEntry.isRemoved()) return true;
+    if (bitmapEntry && bitmapEntry.isRecovered()) return false;
+    const modelComp = await this.workspace.scope.getBitObjectModelComponent(componentId.changeVersion(undefined));
+    if (!modelComp) return false;
+    const isRemoved = await modelComp.isRemoved(
+      this.workspace.scope.legacyScope.objects,
+      componentId.version as string
+    );
+    return Boolean(isRemoved);
+  }
+
+  async isEnvByIdWithoutLoadingComponent(componentId: ComponentID): Promise<boolean> {
+    const versionObj = await this.workspace.scope.getBitObjectVersionById(componentId);
+    const envData = versionObj?.extensions.findCoreExtension('teambit.envs/envs');
+    return envData?.data.type === 'env';
+  }
+
+  /**
+   * get components that were soft-removed and tagged/snapped/merged but not exported yet.
+   */
+  async getRemovedStaged(): Promise<ComponentID[]> {
+    return this.workspace.isOnMain() ? this.getRemovedStagedFromMain() : this.getRemovedStagedFromLane();
+  }
+
+  async addRemovedDependenciesIssues(components: Component[]) {
+    const workspacePolicyManifest = this.depResolver.getWorkspacePolicyManifest();
+    const workspaceDependencies = {
+      ...workspacePolicyManifest.dependencies,
+      ...workspacePolicyManifest.peerDependencies,
+    };
+    const installedDeps = Object.keys(workspaceDependencies);
+    await pMapSeries(components, async (component) => {
+      await this.addRemovedDepIssue(component, installedDeps);
+    });
+  }
+
+  private async addRemovedDepIssue(component: Component, installedDeps: string[]) {
+    const dependencies = this.depResolver.getComponentDependencies(component);
+    const removedDependencies: ComponentID[] = [];
+    let removedEnv: ComponentID | undefined;
+
+    await Promise.all(
+      dependencies.map(async (dep) => {
+        const isRemoved = await this.isRemovedByIdWithoutLoadingComponent(dep.componentId);
+        if (!isRemoved) return;
+
+        // a component can be deleted from the workspace and installed as a package in different version.
+        // normally, this is happening when checked out to a lane and a component is deleted from the lane.
+        // the user still wants to use it but not as part of the lane.
+        const packageName = dep.getPackageName();
+        const isAvailableAsInstalledPackage = installedDeps.includes(packageName);
+        const bitmapEntry = this.workspace.bitMap.getBitmapEntryIfExist(dep.componentId);
+        if (bitmapEntry && isAvailableAsInstalledPackage && bitmapEntry.version !== dep.version) {
+          return;
+        }
+
+        const isEnv = await this.isEnvByIdWithoutLoadingComponent(dep.componentId);
+        if (isEnv) {
+          removedEnv = dep.componentId;
+        } else {
+          removedDependencies.push(dep.componentId);
+        }
+      })
+    );
+    if (removedDependencies.length) {
+      component.state.issues.getOrCreate(IssuesClasses.RemovedDependencies).data = removedDependencies.map((r) =>
+        r.toString()
+      );
+    }
+    if (removedEnv) {
+      component.state.issues.getOrCreate(IssuesClasses.RemovedEnv).data = removedEnv.toString();
+    }
+  }
+
+  private async getRemovedStagedFromMain(): Promise<ComponentID[]> {
+    const stagedConfig = await this.workspace.scope.getStagedConfig();
+    return stagedConfig
+      .getAll()
+      .filter((compConfig) => compConfig.config?.[RemoveAspect.id]?.removed)
+      .map((compConfig) => compConfig.id);
+  }
+
+  private async getRemovedStagedFromLane(): Promise<ComponentID[]> {
+    const currentLane = await this.workspace.getCurrentLaneObject();
+    if (!currentLane) return [];
+    const laneIds = currentLane.toComponentIds();
+    const workspaceIds = this.workspace.listIds();
+    const laneCompIdsNotInWorkspace = laneIds.filter(
+      (id) => !workspaceIds.find((wId) => wId.isEqualWithoutVersion(id))
+    );
+    if (!laneCompIdsNotInWorkspace.length) return [];
+    const comps = await this.workspace.scope.getMany(laneCompIdsNotInWorkspace);
+    const removed = comps.filter((c) => this.isDeleted(c));
+    const staged = await Promise.all(
+      removed.map(async (c) => {
+        const snapDistance = await this.workspace.scope.getSnapDistance(c.id, false);
+        if (snapDistance.err) {
+          this.logger.warn(
+            `getRemovedStagedFromLane unable to get snapDistance for ${c.id.toString()} due to ${snapDistance.err.name}`
+          );
+          // todo: not clear what should be done here. should we consider it as removed-staged or not.
+        }
+        if (snapDistance.isSourceAhead()) return c.id;
+        return undefined;
+      })
+    );
+    return compact(staged);
+  }
+
+  private async getLocalBitIdsToRemove(componentsPattern: string): Promise<ComponentID[]> {
+    if (!this.workspace) throw new ConsumerNotFound();
+    const componentIds = await this.workspace.idsByPattern(componentsPattern);
+    return componentIds.map((id) => id);
+  }
+
+  private async getRemoteBitIdsToRemove(componentsPattern: string): Promise<ComponentID[]> {
+    if (hasWildcard(componentsPattern)) {
+      return this.lister.getRemoteCompIdsByWildcards(componentsPattern);
+    }
+    return [ComponentID.fromString(componentsPattern)];
+  }
+
+  static slots = [];
+  static dependencies = [
+    WorkspaceAspect,
+    ScopeAspect,
+    CLIAspect,
+    LoggerAspect,
+    ComponentAspect,
+    ImporterAspect,
+    DependencyResolverAspect,
+    IssuesAspect,
+    ListerAspect,
+  ];
+  static runtime = MainRuntime;
+
+  static async provider([
+    workspace,
+    scope,
+    cli,
+    loggerMain,
+    componentAspect,
+    importerMain,
+    depResolver,
+    issues,
+    lister,
+  ]: [
+    Workspace,
+    ScopeMain,
+    CLIMain,
+    LoggerMain,
+    ComponentMain,
+    ImporterMain,
+    DependencyResolverMain,
+    IssuesMain,
+    ListerMain,
+  ]) {
+    const logger = loggerMain.createLogger(RemoveAspect.id);
+    const removeMain = new RemoveMain(workspace, scope, logger, importerMain, depResolver, lister);
+    issues.registerAddComponentsIssues(removeMain.addRemovedDependenciesIssues.bind(removeMain));
+    componentAspect.registerShowFragments([new RemoveFragment(removeMain)]);
+    cli.register(
+      new RemoveCmd(removeMain, workspace),
+      new DeleteCmd(removeMain, workspace),
+      new RecoverCmd(removeMain)
+    );
+    return removeMain;
+  }
+}
+
+RemoveAspect.addRuntime(RemoveMain);
+
+export default RemoveMain;

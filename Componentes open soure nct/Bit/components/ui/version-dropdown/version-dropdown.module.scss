@@ -1,0 +1,139 @@
+@import '@teambit/ui-foundation.ui.constants.z-indexes/z-indexes.module.scss';
+
+.versionDropdown {
+  .menu {
+    padding: 0;
+    right: 0;
+    font-size: var(--bit-p-xs);
+    border-radius: 8px;
+    z-index: $modal-z-index;
+    border: 1px solid var(--border-medium-color, #ededed);
+  }
+}
+
+.versionContainerRoot {
+  max-height: 240px;
+  overflow-y: scroll;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.versionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+
+  &:hover {
+    background-color: var(--surface-hover-color, #eceaff) !important;
+  }
+
+  &.localVersion {
+    border-bottom: 1px solid var(--bit-border-color-lightest, #ededed);
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+  }
+
+  .versionTimestamp {
+    margin-right: 2px;
+  }
+
+  .versionUserAvatar {
+    padding: 0px 8px;
+  }
+
+  .laneIcon {
+    padding: 0px 4px;
+  }
+
+  .version {
+    width: 60%;
+    display: flex;
+    flex-direction: row;
+    align-content: space-between;
+    align-items: center;
+  }
+
+  .versionName {
+    padding: 0px 8px;
+    min-width: fit-content;
+    text-transform: capitalize;
+  }
+}
+
+.withVersions {
+  cursor: pointer;
+
+  > div {
+    margin-right: 5px;
+  }
+
+  > span {
+    display: unset;
+  }
+
+  &:hover {
+    background-color: var(--bit-bg-heavy);
+  }
+
+  [data-open='true'] & {
+    transition:
+      color 300ms,
+      background-color 300ms ease-in-out;
+    background-color: var(--bit-bg-color, #ffffff);
+    color: var(--bit-accent-color, #6c5ce7);
+
+    &:hover {
+      background-color: var(--bit-bg-color, #ffffff);
+    }
+  }
+}
+
+.tabs {
+  display: flex;
+  padding: 0 24px;
+  line-height: 14px;
+  border-bottom: 1px solid var(--bit-border-color-lightest, #ededed);
+  overflow-x: auto;
+  margin-top: 8px;
+
+  &.withoutLocal {
+    padding-top: 8px;
+  }
+
+  .tab {
+    font-weight: bold;
+    padding-top: 4px;
+    font-size: 12px;
+  }
+}
+
+.loading {
+  color: var(--bit-bg-dent, #f6f6f6);
+}
+
+.loader {
+  color: var(--bit-bg-dent, #f6f6f6);
+
+  > div {
+    padding: 8px 0px;
+    border-radius: 0px;
+    &:first-child {
+      border-top-left-radius: 7px;
+      border-top-right-radius: 7px;
+    }
+    &:last-child {
+      border-bottom-left-radius: 7px;
+      border-bottom-right-radius: 7px;
+    }
+  }
+}
+
+.versionMenuContainer {
+  display: initial;
+
+  &.hide {
+    display: none;
+  }
+}

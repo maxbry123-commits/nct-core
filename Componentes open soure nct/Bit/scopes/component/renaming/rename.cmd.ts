@@ -1,0 +1,60 @@
+import chalk from 'chalk';
+import type { Command, CommandOptions } from '@teambit/cli';
+import { formatSuccessSummary } from '@teambit/cli';
+import type { RenamingMain } from './renaming.main.runtime';
+
+export type RenameOptions = {
+  scope?: string;
+  path?: string;
+  refactor?: boolean;
+  preserve?: boolean;
+  ast?: boolean;
+  deprecate?: boolean;
+  skipCompile?: boolean;
+};
+
+export class RenameCmd implements Command {
+  name = 'rename <current-name> <new-name>';
+  description = 'change a component name';
+  extendedDescription = `renames a component and optionally refactors dependent code to use the new name.
+for exported components: creates a new component with the new name and marks the original as deleted.
+for local components: simply renames the existing component in place.`;
+  helpUrl = 'reference/components/renaming-components';
+  arguments = [
+    {
+      name: 'current-name',
+      description: 'the current component name (without its scope name)',
+    },
+    {
+      name: 'new-name',
+      description: "the new component name (without its scope name. use --scope to define the new component's scope)",
+    },
+  ];
+  group = 'component-development';
+  skipWorkspace = true;
+  alias = '';
+  options = [
+    ['s', 'scope <scope-name>', 'define the scope for the new component'],
+    ['r', 'refactor', 'update the import/require statements in all dependent components (in the same workspace)'],
+    ['', 'preserve', 'avoid renaming files and variables/classes according to the new component name'],
+    ['', 'ast', 'use ast to transform files instead of regex'],
+    ['', 'delete', 'DEPRECATED. this is now the default'],
+    ['', 'deprecate', 'instead of deleting the original component, deprecate it'],
+    [
+      'p',
+      'path <relative-path>',
+      'relative path in the workspace to place new component in. by default, the directory of the new component is from your workspace\'s "defaultScope" value',
+    ],
+  ] as CommandOptions;
+  loader = true;
+  remoteOp = true;
+
+  constructor(private renaming: RenamingMain) {}
+
+  async report([sourceId, targetId]: [string, string], options: RenameOptions): Promise<string> {
+    const results = await this.renaming.rename(sourceId, targetId, options);
+    return formatSuccessSummary(
+      `renamed ${chalk.bold(results.sourceId.toString())} to ${chalk.bold(results.targetId.toString())}`
+    );
+  }
+}

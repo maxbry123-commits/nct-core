@@ -1,0 +1,591 @@
+// eslint-disable-next-line max-classes-per-file
+import type { Command, CommandOptions } from '@teambit/cli';
+import {
+  formatTitle,
+  formatItem,
+  formatSection,
+  formatSuccessSummary,
+  formatHint,
+  joinSections,
+  warnSymbol,
+} from '@teambit/cli';
+import Table from 'cli-table';
+import chalk from 'chalk';
+import archy from 'archy';
+import type { ComponentIdGraph } from '@teambit/graph';
+import { COMPONENT_PATTERN_HELP } from '@teambit/legacy.constants';
+import { renderCycles } from '@teambit/component-issues';
+import { generateDependenciesInfoTable } from './template';
+import type { DependenciesMain } from './dependencies.main.runtime';
+import type { Workspace } from '@teambit/workspace';
+
+/** Create a borderless CLI table (columns aligned with whitespace only). */
+function borderlessTable(
+  opts: { head?: string[]; paddingLeft?: number; paddingRight?: number } = {}
+): InstanceType<typeof Table> {
+  const noChar = {
+    top: '',
+    'top-mid': '',
+    'top-left': '',
+    'top-right': '',
+    bottom: '',
+    'bottom-mid': '',
+    'bottom-left': '',
+    'bottom-right': '',
+    left: '',
+    'left-mid': '',
+    mid: '',
+    'mid-mid': '',
+    right: '',
+    'right-mid': '',
+    middle: ' ',
+  };
+  return new Table({
+    chars: noChar,
+    style: { 'padding-left': opts.paddingLeft ?? 0, 'padding-right': opts.paddingRight ?? 0 },
+    ...(opts.head ? { head: opts.head } : {}),
+  });
+}
+
+const IMPACT_COLOR: Record<string, (s: string) => string> = {
+  HIGH: chalk.red,
+  MEDIUM: chalk.yellow,
+  LOW: chalk.green,
+};
+
+type GetDependenciesFlags = {
+  tree: boolean;
+  scope?: boolean;
+};
+
+export type SetDependenciesFlags = {
+  dev?: boolean;
+  optional?: boolean;
+  peer?: boolean;
+};
+
+export type RemoveDependenciesFlags = SetDependenciesFlags;
+
+export class DependenciesGetCmd implements Command {
+  name = 'get <component-name>';
+  arguments = [{ name: 'component-name', description: 'component name or component id' }];
+  group = 'info-analysis';
+  description = 'show direct and indirect dependencies of the given component';
+  alias = '';
+  options = [
+    ['', 'scope', 'get the data from the scope instead of the workspace'],
+    ['t', 'tree', 'render dependencies as a tree, similar to "npm ls"'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([id]: [string], { tree = false, scope = false }: GetDependenciesFlags) {
+    const results = await this.deps.getDependencies(id, scope);
+
+    if (tree) {
+      const idWithVersion = results.id;
+      const getGraphAsTree = (graph: ComponentIdGraph) => {
+        try {
+          const graphAsTree = graph.getDependenciesAsObjectTree(idWithVersion.toString());
+          return archy(graphAsTree);
+        } catch (err: any) {
+          if (err.constructor.name === 'RangeError') {
+            return `${chalk.red(
+              'unable to generate a tree representation, the graph is too big or has cyclic dependencies'
+            )}`;
+          }
+          throw err;
+        }
+      };
+      const graphTree = getGraphAsTree(results.graph);
+      return graphTree;
+    }
+    const depsInfo = results.graph.getDependenciesInfo(results.id);
+    if (!depsInfo.length) {
+      return `no dependencies found for ${results.id.toString()}.
+try running "bit cat-component ${results.id.toStringWithoutVersion()}" to see whether the component/version exists locally`;
+    }
+
+    const depsTable = generateDependenciesInfoTable(depsInfo, results.id);
+    return `${depsTable || '<none>'}`;
+  }
+}
+
+export class DependenciesDebugCmd implements Command {
+  name = 'debug <component-name>';
+  arguments = [{ name: 'component-name', description: 'component name or component id' }];
+  group = 'info-analysis';
+  description = 'show the immediate dependencies and how their versions were determined';
+  alias = '';
+  options = [] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([id]: [string]) {
+    const results = await this.deps.debugDependencies(id);
+    return JSON.stringify(results, undefined, 4);
+  }
+}
+
+export class DependenciesSetCmd implements Command {
+  name = 'set <component-pattern> <package...>';
+  arguments = [
+    { name: 'component-pattern', description: COMPONENT_PATTERN_HELP },
+    {
+      name: 'package...',
+      description:
+        'package name with or without a version, e.g. "lodash@1.0.0" or just "lodash" which will be resolved to the latest',
+    },
+  ];
+  group = 'dependencies';
+  description = 'set a dependency to component(s)';
+  alias = '';
+  options = [
+    ['d', 'dev', 'add to the devDependencies'],
+    ['o', 'optional', 'add to the optionalDependencies'],
+    ['p', 'peer', 'add to the peerDependencies'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([pattern, packages]: [string, string[]], setDepsFlags: SetDependenciesFlags) {
+    const { changedComps, addedPackages } = await this.deps.setDependency(pattern, packages, setDepsFlags);
+
+    const compItems = changedComps.map((c) => formatItem(c));
+    const compSection = formatSection('changed components', '', compItems);
+    const pkgSection = `${formatTitle('added packages')}\n${JSON.stringify(addedPackages, undefined, 4)}`;
+    return joinSections([formatSuccessSummary('successfully updated dependencies'), compSection, pkgSection]);
+  }
+}
+
+export class DependenciesRemoveCmd implements Command {
+  name = 'remove <component-pattern> <package...>';
+  arguments = [
+    { name: 'component-pattern', description: COMPONENT_PATTERN_HELP },
+    {
+      name: 'package...',
+      description:
+        'package name with or without a version, e.g. "lodash@1.0.0" or just "lodash" which will remove all lodash instances of any version',
+    },
+  ];
+  group = 'dependencies';
+  description = 'remove a dependency from one or more components';
+  extendedDescription = `this command removes the dependency whether it was set by 'bit deps set'/variants or by auto-detection.
+if the dependency was auto-detected, it will be marked with a minus sign in the .bitmap file.
+otherwise, the config is written to .bitmap without the dependency.
+see also 'bit deps unset'`;
+  alias = '';
+  options = [
+    ['d', 'dev', 'remove from devDependencies'],
+    ['p', 'peer', 'remove from peerDependencies'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([pattern, packages]: [string, string[]], removeDepsFlags: RemoveDependenciesFlags) {
+    const results = await this.deps.removeDependency(pattern, packages, removeDepsFlags);
+    if (!results.length) {
+      return formatHint('the specified component-pattern does not use the entered packages. nothing to remove');
+    }
+
+    const sections = results.map(({ id, removedPackages }) => {
+      const items = removedPackages.map((pkg) => formatItem(pkg));
+      return formatSection(id.toString(), '', items);
+    });
+
+    return joinSections([formatSuccessSummary('successfully removed dependencies'), ...sections]);
+  }
+}
+
+export class DependenciesUnsetCmd implements Command {
+  name = 'unset <component-pattern> <package...>';
+  arguments = [
+    { name: 'component-pattern', description: COMPONENT_PATTERN_HELP },
+    {
+      name: 'package...',
+      description:
+        'package name with or without a version, e.g. "lodash@1.0.0" or just "lodash" which will remove all lodash instances of any version',
+    },
+  ];
+  group = 'dependencies';
+  description = 'unset a dependency to component(s) that was set via config (e.g. "bit deps set" or variants)';
+  extendedDescription = `this command removes the dependency only when it was set by config not if it was auto detected.
+in the .bitmap file, the config is written without the dependency.
+see also "bit deps remove"`;
+  alias = '';
+  options = [
+    ['d', 'dev', 'unset from devDependencies'],
+    ['p', 'peer', 'unset from peerDependencies'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([pattern, packages]: [string, string[]], removeDepsFlags: RemoveDependenciesFlags) {
+    const results = await this.deps.removeDependency(pattern, packages, removeDepsFlags, true);
+    if (!results.length) {
+      return formatHint('the specified component-pattern does not use the entered packages. nothing to unset');
+    }
+
+    const sections = results.map(({ id, removedPackages }) => {
+      const items = removedPackages.map((pkg) => formatItem(pkg));
+      return formatSection(id.toString(), '', items);
+    });
+
+    return joinSections([formatSuccessSummary('successfully unset dependencies'), ...sections]);
+  }
+}
+
+export class DependenciesResetCmd implements Command {
+  name = 'reset <component-pattern>';
+  arguments = [{ name: 'component-pattern', description: COMPONENT_PATTERN_HELP }];
+  group = 'dependencies';
+  description = 'reset dependencies to the default values (revert any previously "bit deps set")';
+  alias = '';
+  options = [] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([pattern]: [string]) {
+    const results = await this.deps.reset(pattern);
+    const comps = results.map((id) => id.toString());
+
+    const items = comps.map((c) => formatItem(c));
+    return joinSections([formatSuccessSummary('successfully reset dependencies'), items.join('\n')]);
+  }
+}
+
+export class DependenciesEjectCmd implements Command {
+  name = 'eject <component-pattern>';
+  arguments = [{ name: 'component-pattern', description: COMPONENT_PATTERN_HELP }];
+  group = 'dependencies';
+  description = 'write dependencies that were previously set via "bit deps set" into .bitmap';
+  alias = '';
+  options = [] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([pattern]: [string]) {
+    const results = await this.deps.eject(pattern);
+    const comps = results.map((id) => id.toString());
+
+    const items = comps.map((c) => formatItem(c));
+    return joinSections([formatSuccessSummary('successfully ejected dependencies'), items.join('\n')]);
+  }
+}
+
+export class DependenciesBlameCmd implements Command {
+  name = 'blame <component-name> <dependency-name>';
+  arguments = [
+    {
+      name: 'dependency-name',
+      description: 'package-name. for components, you can use either component-id or package-name',
+    },
+  ];
+  group = 'info-analysis';
+  description = 'find out which snap/tag changed a dependency version';
+  alias = '';
+  options = [] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([compName, depName]: [string, string]) {
+    const results = await this.deps.blame(compName, depName);
+    if (!results.length) {
+      return formatHint(`the specified component ${compName} does not use the entered dependency ${depName}`);
+    }
+    const table = borderlessTable();
+    results.map(({ snap, tag, author, date, message, version }) =>
+      table.push([snap, tag || '', author, date, message, version])
+    );
+
+    return table.toString();
+  }
+}
+
+type DependenciesUsageCmdOptions = {
+  depth?: number;
+};
+
+export class DependenciesUsageCmd implements Command {
+  name = 'usage <dependency-name>';
+  arguments = [
+    {
+      name: 'dependency-name',
+      description:
+        'package-name. for components, you can use either component-id or package-name. if version is specified, it will search for the exact version',
+    },
+  ];
+  group = 'dependencies';
+  description = 'find components that use the specified dependency';
+  extendedDescription = `searches workspace components to find which ones depend on the specified package or component.
+useful for understanding dependency usage before removing packages or when refactoring components.
+supports both exact version matching and package name patterns.`;
+  alias = '';
+  options = [['', 'depth <number>', 'max display depth of the dependency graph']] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([depName]: [string], options: DependenciesUsageCmdOptions) {
+    const deepUsageResult = await this.deps.usageDeep(depName, options);
+    if (deepUsageResult != null) return deepUsageResult;
+    const results = await this.deps.usage(depName);
+    if (!Object.keys(results).length) {
+      return formatHint(`the specified dependency ${depName} is not used by any component`);
+    }
+    return Object.keys(results)
+      .map((compIdStr) => `${chalk.bold(compIdStr)} (using dep in version ${results[compIdStr]})`)
+      .join('\n');
+  }
+}
+
+export class WhyCmd extends DependenciesUsageCmd {
+  name = 'why <dependency-name>';
+}
+
+export class DependenciesDiagnoseCmd implements Command {
+  name = 'diagnose';
+  group = 'info-analysis';
+  description = 'analyze workspace dependencies for version spread, peer permutations, and bloat';
+  extendedDescription = `scans node_modules/.pnpm to report actual installed copies, identifies packages with multiple versions, and highlights peer dependencies causing permutation explosion. Use --package to drill down into a specific package.`;
+  alias = '';
+  options = [
+    ['', 'package <string>', 'drill down into a specific package to see all .pnpm copies and peer combos'],
+    ['', 'origins', 'show peer version origins — which envs and components contribute each peer version'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report(_args: [], options: { package?: string; origins?: boolean }) {
+    if (options.package) {
+      return this.reportPackageDrillDown(options.package);
+    }
+
+    const report = await this.deps.diagnose();
+    const bloatFactor =
+      report.uniquePackages > 0
+        ? `${(report.pnpmStoreEntries / report.uniquePackages).toFixed(1)}x bloat factor`
+        : 'N/A';
+    const sections: string[] = [
+      formatTitle('Dependency Diagnosis for workspace'),
+      '',
+      formatTitle('Summary:'),
+      `  Components in workspace: ${report.componentCount}`,
+      `  Unique packages: ${report.uniquePackages.toLocaleString()}`,
+      `  Installed copies (.pnpm entries): ${report.pnpmStoreEntries.toLocaleString()} (${bloatFactor})`,
+      `  Packages with duplicates: ${report.duplicatedPackages}`,
+    ];
+
+    if (report.versionSpread.length) {
+      const spreadTable = borderlessTable({
+        head: ['Package', 'Versions', 'Copies', 'Impact'],
+        paddingLeft: 2,
+        paddingRight: 1,
+      });
+      report.versionSpread.forEach((entry) => {
+        spreadTable.push([
+          entry.packageName,
+          String(entry.versionCount),
+          String(entry.installedCopies),
+          (IMPACT_COLOR[entry.impact] || chalk.green)(entry.impact),
+        ]);
+      });
+      sections.push('', formatTitle('Top version-spread packages:'), spreadTable.toString());
+    }
+
+    if (report.peerPermutations.length) {
+      const peerTable = borderlessTable({
+        head: ['Package', 'Declared versions', 'Installed copies'],
+        paddingLeft: 2,
+        paddingRight: 1,
+      });
+      report.peerPermutations.forEach((entry) => {
+        const copies = entry.installedCopies > 0 ? String(entry.installedCopies) : chalk.dim('0 (not installed)');
+        peerTable.push([entry.packageName, `${entry.versions.length} (${entry.versions.join(', ')})`, copies]);
+      });
+      sections.push('', formatTitle('Peer dependencies causing permutations:'), peerTable.toString());
+
+      if (options.origins) {
+        // Show peer version origins grouped by version
+        const originLines: string[] = [];
+        for (const entry of report.peerPermutations) {
+          if (!entry.versionOrigins.length) continue;
+          originLines.push(`  ${chalk.bold(entry.packageName)}`);
+          for (const vo of entry.versionOrigins) {
+            if (!vo.envs.length && !vo.components.length) continue;
+            originLines.push(`    ${chalk.cyan(vo.version)}`);
+            if (vo.envs.length) {
+              originLines.push(`      envs: ${vo.envs.join(', ')}`);
+            }
+            if (vo.components.length) {
+              const compStrs = vo.components.map((o) => o.componentId);
+              originLines.push(`      components: ${compStrs.join(', ')}`);
+            }
+          }
+        }
+        if (originLines.length) {
+          sections.push('', formatTitle('  Peer version origins:'), ...originLines);
+        }
+      } else {
+        sections.push(
+          '',
+          formatHint('  Tip: use --origins to see which envs and components contribute each peer version')
+        );
+      }
+    }
+
+    return sections.join('\n');
+  }
+
+  private async reportPackageDrillDown(packageName: string): Promise<string> {
+    const { pnpmDirs } = await this.deps.diagnoseDrillDown(packageName);
+    const header = [
+      formatTitle(`Package drill-down: ${packageName}`),
+      '',
+      `  Installed copies: ${pnpmDirs.length}`,
+      '',
+    ];
+
+    if (!pnpmDirs.length) {
+      return [
+        ...header,
+        `  ${warnSymbol} No .pnpm entries found for this package.`,
+        formatHint('  The package may not exist in this workspace, or it may be installed only once.'),
+      ].join('\n');
+    }
+
+    // Group by version
+    const byVersion = new Map<string, string[]>();
+    for (const dir of pnpmDirs) {
+      const suffixes = byVersion.get(dir.version) || [];
+      suffixes.push(dir.peerSuffix || '(no peers)');
+      byVersion.set(dir.version, suffixes);
+    }
+
+    const versionLines = Array.from(byVersion, ([version, suffixes]) => [
+      chalk.bold(`  ${packageName}@${version}`) + chalk.dim(` — ${suffixes.length} copies`),
+      ...suffixes.map((s) => `    ${chalk.dim(s)}`),
+    ]).flat();
+
+    return [...header, ...versionLines].join('\n');
+  }
+
+  async json(_args: [], options: { package?: string }) {
+    if (options.package) {
+      return this.deps.diagnoseDrillDown(options.package);
+    }
+    return this.deps.diagnose();
+  }
+}
+
+type DependenciesCircularCmdOptions = {
+  includeDeps?: boolean;
+};
+
+export class DependenciesCircularCmd implements Command {
+  name = 'circular';
+  group = 'info-analysis';
+  description = 'find circular dependencies in the component graph';
+  alias = '';
+  options = [
+    ['j', 'json', 'return the output in JSON format'],
+    ['', 'include-deps', 'include component dependencies that are not in this workspace'],
+  ] as CommandOptions;
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report(_args: [], options: DependenciesCircularCmdOptions) {
+    const cycles = await this.deps.getCircularDependencies(options.includeDeps);
+    return renderCycles(cycles);
+  }
+
+  async json(_args: [], options: DependenciesCircularCmdOptions) {
+    return this.deps.getCircularDependencies(options.includeDeps);
+  }
+}
+
+export class DependenciesCmd implements Command {
+  name = 'deps <sub-command>';
+  alias = 'dependencies';
+  description = 'manage component dependencies';
+  extendedDescription = `configure and analyze component dependencies with sub-commands for setting, removing, and inspecting dependency relationships.`;
+  options = [];
+  group = 'dependencies';
+  commands: Command[] = [];
+  helpUrl = 'reference/dependencies/configuring-dependencies';
+
+  async report([unrecognizedSubcommand]: [string]) {
+    return chalk.red(
+      `"${unrecognizedSubcommand}" is not a subcommand of "dependencies", please run "bit dependencies --help" to list the subcommands`
+    );
+  }
+}
+
+export class SetPeerCmd implements Command {
+  name = 'set-peer <component-id> <range>';
+  arguments = [
+    { name: 'component-id', description: 'the component to set as always peer' },
+    {
+      name: 'range',
+      description: 'the default range to use for the component, when added to peerDependencies',
+    },
+  ];
+  group = 'dependencies';
+  description = 'configure component to always be installed as peer dependency';
+  extendedDescription = `marks a component to always be treated as a peer dependency when used by other components.
+useful for shared libraries that should be provided by the consuming application.
+the specified version range will be used when adding this component as a peer dependency.`;
+  alias = '';
+  options = [];
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([componentId, range]: [string, string]) {
+    await this.deps.setPeer(componentId, range != null ? range.toString() : range);
+    return formatSuccessSummary('successfully marked the component as a peer component');
+  }
+}
+
+export class UnsetPeerCmd implements Command {
+  name = 'unset-peer <component-id>';
+  arguments = [{ name: 'component-id', description: 'the component to unset as always peer' }];
+  group = 'dependencies';
+  description = 'remove always-peer configuration from component';
+  extendedDescription = `removes the always-peer marking from a component, allowing it to be installed as a regular dependency.
+reverses the effect of 'bit set-peer' command. the component will be treated normally in dependency resolution.`;
+  alias = '';
+  options = [];
+
+  constructor(private deps: DependenciesMain) {}
+
+  async report([componentId]: [string]) {
+    await this.deps.unsetPeer(componentId);
+    return formatSuccessSummary('successfully marked the component as not a peer component');
+  }
+}
+
+type DependenciesWriteCmdOptions = {
+  target?: 'workspace.jsonc' | 'package.json';
+};
+
+export class DependenciesWriteCmd implements Command {
+  name = 'write';
+  arguments = [];
+  group = 'dependencies';
+  description =
+    'write all workspace component dependencies to package.json or workspace.jsonc, resolving conflicts by picking the ranges that match the highest versions';
+  alias = '';
+  options = [
+    [
+      '',
+      'target <workspace.jsonc|package.json>',
+      'specify where the dependencies should be written. By default they are saved to workspace.jsonc',
+    ],
+  ] as CommandOptions;
+
+  constructor(private workspace: Workspace) {}
+
+  async report(_, options: DependenciesWriteCmdOptions) {
+    await this.workspace.writeDependencies(options.target);
+    return '';
+  }
+}
