@@ -1,0 +1,71 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/pyodide.asm.wasm",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/pyodide.asm.wasm",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "26f1b2e3f882d64445765c3ae23585c8ebbfbe1d",
+      "bytes": 8970331,
+      "status": "PREPARED",
+      "sha256": "37446c1e564ca50c9e9d8080bb6c5dffb1f4460c956c99ba1c3e5ebd4d2ac3d0"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/pyproj-3.4.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/pyproj-3.4.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "6ed866ec7406efde062e4c09823adf3b35e47dde",
+      "bytes": 18798272,
+      "status": "PREPARED",
+      "sha256": "cd7aad0a62dd78b2ac4835d03fc0fdce950d88e7ed4ccdde89106c97a73926c3"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/python_stdlib.zip",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/python_stdlib.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "e577bc5b81b894c4431246dc9b0db5cde6bf97b6",
+      "bytes": 8874549,
+      "status": "PREPARED",
+      "sha256": "03df2f2dbcbde694a8abca3669f3733a4187e39b4ab5b171e0bf96d2526b76cc"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/scikit_image-0.19.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/scikit_image-0.19.3-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "724190ec35ddeebcb6a0878545f6083ebeb67734",
+      "bytes": 20486224,
+      "status": "PREPARED",
+      "sha256": "1f812e55891a30a4aa2b21423d5967ed5078cc8fee7a53520a2b73a2571b4769"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/scikit_learn-1.2.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/scikit_learn-1.2.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "ed1f7c934f5d01ccfafe17d48a55ec9fb7c39162",
+      "bytes": 16820333,
+      "status": "PREPARED",
+      "sha256": "18ae7aa517712eece11a72414dbf24d5ad497b55a80ff11bed5baf8b4605b2b9"
+    }
+  ]
+}
