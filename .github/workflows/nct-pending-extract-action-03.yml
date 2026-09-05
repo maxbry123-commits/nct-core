@@ -1,0 +1,60 @@
+name: NCT Pending Extract Action 03 - OpenPencil to Plasmic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+  GIT_TERMINAL_PROMPT: "0"
+
+concurrency:
+  group: nct-core-componentes-open-source-main
+  cancel-in-progress: false
+
+jobs:
+  extract-action-03:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+
+      - name: Extract 5 pending components
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST='Componentes open soure nct'
+          components=(OpenPencil Parcel Penpot PlantUML Plasmic)
+          shopt -s nullglob
+          for slug in "${components[@]}"; do
+            for z in "$DEST/${slug}_"*.zip; do
+              unzip -oq "$z" -d "$DEST"
+            done
+          done
+
+      - name: Publish extracted trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST='Componentes open soure nct'
+          components=(OpenPencil Parcel Penpot PlantUML Plasmic)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for slug in "${components[@]}"; do
+            git add -- "$DEST/$slug"
+          done
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'extract: pending action 03 OpenPencil to Plasmic'
+          git pull --rebase origin main
+          git push origin HEAD:main
