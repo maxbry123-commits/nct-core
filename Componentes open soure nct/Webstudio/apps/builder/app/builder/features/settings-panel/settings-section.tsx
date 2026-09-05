@@ -1,0 +1,90 @@
+import { useEffect, useId, useState } from "react";
+import { useStore } from "@nanostores/react";
+import { InputField, Tooltip } from "@webstudio-is/design-system";
+import { useDraftValue } from "~/builder/shared/use-draft-value";
+import { HorizontalLayout, Label, Row } from "./shared";
+import { $selectedInstance } from "~/shared/nano-states";
+import { getInstanceLabel } from "~/builder/shared/instance-label";
+import {
+  executeRuntimeMutation,
+  getDuplicateTemplateNameMessage,
+} from "~/shared/instance-utils/data";
+import {
+  $externalContentRoots,
+  externalContentInstanceNameMessage,
+  isExternalContentInstance,
+} from "~/shared/external-content-mutations";
+
+export const SettingsSection = () => {
+  const selectedInstance = useStore($selectedInstance);
+  const externalContentRoots = useStore($externalContentRoots);
+  const id = useId();
+  const [error, setError] = useState<string>();
+  useEffect(() => setError(undefined), [selectedInstance?.id]);
+  const localValue = useDraftValue(
+    selectedInstance?.label ?? "",
+    (value) => {
+      if (selectedInstance === undefined) {
+        return;
+      }
+      if (
+        isExternalContentInstance(
+          $externalContentRoots.get(),
+          selectedInstance.id
+        )
+      ) {
+        return;
+      }
+      try {
+        executeRuntimeMutation({
+          id: "instances.setLabel",
+          input: { instanceId: selectedInstance.id, label: value },
+        });
+        setError(undefined);
+      } catch (error) {
+        const message = getDuplicateTemplateNameMessage(error);
+        if (message === undefined) {
+          throw error;
+        }
+        setError(message);
+      }
+    },
+    { autoSave: false }
+  );
+
+  if (selectedInstance === undefined) {
+    return;
+  }
+
+  const placeholder = getInstanceLabel(selectedInstance);
+  const isNameEditable =
+    isExternalContentInstance(externalContentRoots, selectedInstance.id) ===
+    false;
+
+  return (
+    <Row>
+      <HorizontalLayout label={<Label htmlFor={id}>Name</Label>}>
+        <Tooltip
+          content={isNameEditable ? error : externalContentInstanceNameMessage}
+          delayDuration={0}
+        >
+          <InputField
+            id={id}
+            /* Key is required, otherwise when label is undefined, previous value stayed */
+            key={selectedInstance.id}
+            placeholder={placeholder}
+            value={localValue.value}
+            color={error === undefined ? undefined : "error"}
+            aria-invalid={error === undefined ? undefined : true}
+            disabled={isNameEditable === false}
+            onChange={(event) => {
+              setError(undefined);
+              localValue.set(event.target.value);
+            }}
+            onBlur={localValue.save}
+          />
+        </Tooltip>
+      </HorizontalLayout>
+    </Row>
+  );
+};

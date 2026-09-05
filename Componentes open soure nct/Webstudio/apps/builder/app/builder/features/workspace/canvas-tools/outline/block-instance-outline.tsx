@@ -1,0 +1,437 @@
+import { deleteInstanceBySelector } from "~/shared/instance-utils/mutation";
+import { useRef, useState } from "react";
+import { useStore } from "@nanostores/react";
+import { shallowEqual } from "shallow-equal";
+import {
+  Box,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  Flex,
+  theme,
+  IconButton,
+  Tooltip,
+  Kbd,
+  Text,
+  Grid,
+  DropdownMenuSeparator,
+  menuItemCss,
+} from "@webstudio-is/design-system";
+import type { Instance } from "@webstudio-is/sdk";
+import { PlusIcon, TrashIcon } from "@webstudio-is/icons";
+import {
+  $blockChildOutline,
+  $hoveredInstanceOutline,
+  $hoveredInstanceSelector,
+  $isContentMode,
+  $modifierKeys,
+  type BlockChildOutline,
+} from "~/shared/nano-states";
+import { $instances } from "~/shared/sync/data-stores";
+import { $clampingRect, $scale } from "~/builder/shared/nano-states";
+import type { InstanceSelector } from "@webstudio-is/project-build/runtime";
+import {
+  canDeleteInstanceInContentMode,
+  findBlockSelector,
+  findBlockTemplates,
+} from "@webstudio-is/project-build/runtime";
+import { skipInertHandlersAttribute } from "~/builder/shared/inert-handlers";
+import { useEffectEvent } from "~/shared/hook-utils/effect-event";
+import { insertTemplateAt } from "./block-utils";
+import { Outline } from "./outline";
+import { applyScale } from "../apply-scale";
+import { canvasToolColors } from "../color-recipes";
+import {
+  getInstanceLabel,
+  InstanceIcon,
+} from "~/builder/shared/instance-label";
+import { useOutlineControlPosition } from "./use-outline-control-position";
+
+export const TemplatesMenu = ({
+  onOpenChange,
+  open,
+  children,
+  anchor,
+  triggerTooltipContent,
+  templates,
+  value,
+  onValueChangeComplete,
+  onValueChange,
+  modal,
+  inert,
+  preventFocusOnHover,
+}: {
+  children: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  anchor: InstanceSelector;
+  triggerTooltipContent: JSX.Element;
+  templates: [instance: Instance, instanceSelector: InstanceSelector][];
+  value: InstanceSelector | undefined;
+  onValueChangeComplete: (value: InstanceSelector) => void;
+  onValueChange?: undefined | ((value: InstanceSelector | undefined) => void);
+  modal: boolean;
+  inert: boolean;
+  preventFocusOnHover: boolean;
+}) => {
+  const instances = useStore($instances);
+  const modifierKeys = useStore($modifierKeys);
+  const preventCloseAutoFocusRef = useRef(false);
+
+  const blockInstanceSelector = findBlockSelector({ anchor, instances });
+
+  const handleValueChangeComplete = useEffectEvent((value: string) => {
+    preventCloseAutoFocusRef.current = true;
+    const templateSelector = JSON.parse(value) as InstanceSelector;
+    onValueChangeComplete(templateSelector);
+  });
+
+  const handleValueChange = useEffectEvent(
+    (value: InstanceSelector | undefined) => {
+      onValueChange?.(value);
+    }
+  );
+
+  if (blockInstanceSelector === undefined) {
+    return;
+  }
+
+  const blockInstance = instances.get(blockInstanceSelector[0]);
+
+  if (blockInstance === undefined) {
+    return;
+  }
+
+  // 1 child is Templates instance
+  const hasChildren = blockInstance.children.length > 1;
+
+  const menuItems = templates?.map(([template, templateSelector]) => ({
+    id: template.id,
+    icon: <InstanceIcon instance={{ component: template.component }} />,
+    title: getInstanceLabel(template),
+    value: templateSelector,
+  }));
+
+  return (
+    <DropdownMenu onOpenChange={onOpenChange} open={open} modal={modal}>
+      <Tooltip
+        content={triggerTooltipContent}
+        side="top"
+        disableHoverableContent
+      >
+        <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={16}
+        side="bottom"
+        loop
+        onCloseAutoFocus={(event) => {
+          if (preventCloseAutoFocusRef.current === false) {
+            return;
+          }
+          preventCloseAutoFocusRef.current = false;
+          event.preventDefault();
+        }}
+        // @todo remove inert after creation
+        {...(inert ? { inert: "" } : {})}
+      >
+        {templates.length > 0 ? (
+          <>
+            <DropdownMenuRadioGroup
+              value={value !== undefined ? JSON.stringify(value) : value}
+              // oxlint-disable-next-line react-hooks/rules-of-hooks -- our useEffectEvent is a stable callback
+              onValueChange={handleValueChangeComplete}
+            >
+              {menuItems?.map((item) => (
+                <DropdownMenuRadioItem
+                  aria-selected={
+                    JSON.stringify(item.value) === JSON.stringify(value)
+                  }
+                  onPointerEnter={() => {
+                    // oxlint-disable-next-line react-hooks/rules-of-hooks -- our useEffectEvent is a stable callback
+                    handleValueChange(value);
+                  }}
+                  onPointerMove={
+                    preventFocusOnHover
+                      ? (e) => {
+                          e.preventDefault();
+                        }
+                      : undefined
+                  }
+                  onPointerLeave={
+                    preventFocusOnHover
+                      ? (e) => {
+                          // oxlint-disable-next-line react-hooks/rules-of-hooks -- our useEffectEvent is a stable callback
+                          handleValueChange(undefined);
+                          e.preventDefault();
+                        }
+                      : undefined
+                  }
+                  onPointerDown={
+                    preventFocusOnHover
+                      ? (event) => {
+                          event.preventDefault();
+                        }
+                      : undefined
+                  }
+                  key={item.id}
+                  value={JSON.stringify(item.value)}
+                  {...{ [skipInertHandlersAttribute]: true }}
+                >
+                  <Flex css={{ px: theme.spacing[3] }} gap={2} data-xxx>
+                    {item.icon}
+                    <Box css={{ textTransform: "none" }}>{item.title}</Box>
+                  </Flex>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <div className={menuItemCss({ hint: true })}>
+              <Grid css={{ width: theme.spacing[25] }}>
+                <Flex
+                  gap={1}
+                  css={{ display: hasChildren ? "none" : undefined }}
+                >
+                  <Kbd value={["click"]} />
+                  <Text>to add before</Text>
+                </Flex>
+
+                <Flex
+                  gap={1}
+                  css={{
+                    order: modifierKeys.altKey ? 2 : 0,
+                    display: hasChildren ? undefined : "none",
+                  }}
+                >
+                  <Kbd value={["click"]} />
+                  <Text>to add after</Text>
+                </Flex>
+                <Flex
+                  gap={1}
+                  css={{
+                    order: 1,
+                    display: hasChildren ? undefined : "none",
+                  }}
+                >
+                  <Kbd value={["alt", "click"]} /> <Text>to add before</Text>
+                </Flex>
+              </Grid>
+            </div>
+          </>
+        ) : (
+          <div className={menuItemCss({ hint: true })}>
+            <Grid css={{ width: theme.spacing[25] }}>
+              <Text>No results</Text>
+            </Grid>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export const BlockChildHoveredInstanceOutline = () => {
+  const blockChildOutline = useStore($blockChildOutline);
+  const scale = useStore($scale);
+  const isContentMode = useStore($isContentMode);
+  const modifierKeys = useStore($modifierKeys);
+  const instances = useStore($instances);
+  const clampingRect = useStore($clampingRect);
+
+  const timeoutRef = useRef<undefined | ReturnType<typeof setTimeout>>(
+    undefined
+  );
+  const [buttonOutline, setButtonOutline] = useState<
+    undefined | BlockChildOutline
+  >(undefined);
+
+  const outline = blockChildOutline ?? buttonOutline;
+  const rect =
+    outline === undefined ? undefined : applyScale(outline.rect, scale);
+  const [controlRef, controlPosition] = useOutlineControlPosition(rect);
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  if (!isContentMode) {
+    return;
+  }
+
+  if (outline === undefined) {
+    return;
+  }
+
+  if (rect === undefined) {
+    return;
+  }
+
+  if (clampingRect === undefined) {
+    return;
+  }
+
+  const blockInstanceSelector = findBlockSelector({
+    anchor: outline.selector,
+    instances,
+  });
+
+  if (blockInstanceSelector === undefined) {
+    return;
+  }
+
+  const blockInstance = instances.get(blockInstanceSelector[0]);
+
+  if (blockInstance === undefined) {
+    return;
+  }
+
+  const templates = findBlockTemplates({ anchor: outline.selector, instances });
+
+  if (templates === undefined) {
+    return;
+  }
+
+  if (templates.length === 0) {
+    return;
+  }
+
+  // 1 child is Templates instance
+  const hasChildren = blockInstance.children.length > 1;
+
+  const canDeleteHoveredInstance =
+    shallowEqual(outline.selector, outline.hoveredSelector) &&
+    canDeleteInstanceInContentMode({
+      instanceSelector: outline.selector,
+      instances,
+    });
+  const isAddMode =
+    isMenuOpen ||
+    !modifierKeys.altKey ||
+    !hasChildren ||
+    canDeleteHoveredInstance === false;
+
+  const tooltipContent = (
+    <Grid>
+      <Flex gap={1} css={{ order: isAddMode ? 0 : 2 }}>
+        <Kbd value={["click"]} color="contrast" />
+        <Text color="subtle">to add block</Text>
+      </Flex>
+      <Flex
+        gap={1}
+        css={{ order: 1, display: !hasChildren ? "none" : undefined }}
+      >
+        <Kbd value={["alt", "click"]} color="contrast" />{" "}
+        <Text color="subtle">to delete</Text>
+      </Flex>
+    </Grid>
+  );
+
+  return (
+    <Outline rect={rect} clampingRect={clampingRect}>
+      <Flex
+        ref={controlRef}
+        css={{
+          position: "absolute",
+          left: 0,
+          paddingRight: theme.sizes.controlHeight,
+          ...(controlPosition === "top"
+            ? {
+                top: `calc(-${theme.sizes.controlHeight})`,
+                clipPath: `polygon(0% 0%, ${theme.sizes.controlHeight} 0%, 100% 100%, 0% 100%)`,
+              }
+            : {
+                ...(controlPosition === "bottom"
+                  ? { bottom: `calc(-${theme.sizes.controlHeight})` }
+                  : { top: 0 }),
+                clipPath: `polygon(0% 0%, 100% 0%, ${theme.sizes.controlHeight} 100%, 0% 100%)`,
+              }),
+          // Define grace area for the button
+          pointerEvents: isMenuOpen ? "none" : "all",
+        }}
+        onMouseEnter={() => {
+          clearTimeout(timeoutRef.current);
+          setButtonOutline(outline);
+        }}
+        onMouseLeave={() => {
+          if (isMenuOpen) {
+            return;
+          }
+
+          clearTimeout(timeoutRef.current);
+
+          timeoutRef.current = setTimeout(() => {
+            setButtonOutline(undefined);
+          }, 100);
+        }}
+      >
+        <TemplatesMenu
+          open={isMenuOpen}
+          onOpenChange={(open) => {
+            if (!isAddMode) {
+              return;
+            }
+
+            setIsMenuOpen(open);
+
+            if (!open) {
+              setButtonOutline(undefined);
+            }
+          }}
+          anchor={outline.selector}
+          triggerTooltipContent={tooltipContent}
+          templates={templates}
+          onValueChangeComplete={(templateSelector) => {
+            const insertBefore = modifierKeys.altKey;
+            insertTemplateAt(templateSelector, outline.selector, insertBefore);
+          }}
+          value={undefined}
+          modal={true}
+          inert={false}
+          preventFocusOnHover={false}
+        >
+          <IconButton
+            aria-label={isAddMode ? "Insert block" : "Delete block"}
+            variant={isAddMode ? "local" : "overwritten"}
+            onClick={() => {
+              if (isAddMode) {
+                return;
+              }
+
+              deleteInstanceBySelector(outline.selector);
+
+              setButtonOutline(undefined);
+              $blockChildOutline.set(undefined);
+              $hoveredInstanceSelector.set(undefined);
+              $hoveredInstanceOutline.set(undefined);
+            }}
+            css={{
+              "& svg, & svg *": {
+                pointerEvents: "none",
+              },
+              borderStyle: "solid",
+              borderColor: isAddMode
+                ? canvasToolColors.selectionTranslucent
+                : undefined,
+              borderRadius: theme.borderRadius[4],
+              ...(controlPosition === "top"
+                ? {
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                  }
+                : {
+                    borderTopLeftRadius: 0,
+                    borderTopRightRadius: 0,
+                  }),
+              // Define grace area for the button
+              pointerEvents: isMenuOpen ? "none" : "all",
+            }}
+          >
+            {isAddMode ? <PlusIcon /> : <TrashIcon />}
+          </IconButton>
+        </TemplatesMenu>
+      </Flex>
+    </Outline>
+  );
+};

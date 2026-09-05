@@ -1,0 +1,281 @@
+import { micromark } from "micromark";
+import { useMemo, useState, type ReactNode } from "react";
+import { computed } from "nanostores";
+import { useStore } from "@nanostores/react";
+import {
+  Button,
+  cssVar,
+  Flex,
+  Kbd,
+  Label,
+  Text,
+  Tooltip,
+  theme,
+} from "@webstudio-is/design-system";
+import { AlertIcon } from "@webstudio-is/icons";
+import type { Prop } from "@webstudio-is/sdk";
+import { showAttribute } from "@webstudio-is/react-sdk";
+import { executeRuntimeMutation } from "~/shared/instance-utils/data";
+import {
+  $authPermit,
+  $isContentMode,
+  $selectedInstance,
+} from "~/shared/nano-states";
+import { getPropIdsToDelete } from "@webstudio-is/project-build/runtime";
+import { $props } from "~/shared/sync/data-stores";
+import {
+  $selectedInstanceInitialPropNames,
+  $selectedInstancePropsMetas,
+  humanizeAttribute,
+} from "./shared";
+
+export const useIsBindingResetForbidden = () => {
+  const isContentMode = useStore($isContentMode);
+  const authPermit = useStore($authPermit);
+  return isContentMode || authPermit === "edit";
+};
+
+const usePropMeta = (name: string) => {
+  const store = useMemo(() => {
+    return computed($selectedInstancePropsMetas, (propsMetas) =>
+      propsMetas.get(name)
+    );
+  }, [name]);
+  return useStore(store);
+};
+
+const $selectedInstanceProps = computed(
+  [$selectedInstance, $props],
+  (instance, props) => {
+    const instanceProps = new Map<Prop["name"], Prop>();
+    for (const prop of props.values()) {
+      if (prop.instanceId === instance?.id) {
+        instanceProps.set(prop.name, prop);
+      }
+    }
+    return instanceProps;
+  }
+);
+
+const useProp = (name: string) => {
+  const store = useMemo(() => {
+    return computed([$selectedInstanceProps], (selectedInstanceProps) =>
+      selectedInstanceProps.get(name)
+    );
+  }, [name]);
+  return useStore(store);
+};
+
+export const __testing__ = {
+  getPropIdsToDelete,
+};
+
+const deleteProp = (name: string) => {
+  const instance = $selectedInstance.get();
+  if (instance === undefined) {
+    return;
+  }
+  executeRuntimeMutation({
+    id: "instances.deleteProps",
+    input: {
+      deletions: [{ instanceId: instance.id, name }],
+    },
+  });
+};
+
+const useIsResettable = (name: string) => {
+  const store = useMemo(() => {
+    return computed(
+      [$selectedInstanceInitialPropNames],
+      (initialPropNames) => name === showAttribute || initialPropNames.has(name)
+    );
+  }, [name]);
+  return useStore(store);
+};
+
+export const PropertyLabel = ({
+  name,
+  readOnly,
+  deletable = true,
+  onDelete,
+}: {
+  name: string;
+  readOnly?: boolean;
+  deletable?: boolean;
+  onDelete?: () => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const propMeta = usePropMeta(name);
+  const prop = useProp(name);
+  const label = propMeta?.label ?? humanizeAttribute(name);
+  // not existing properties cannot be deleted
+  const isDeletable = prop !== undefined;
+  const isResettable = useIsResettable(name);
+  const isBindingResetForbidden = useIsBindingResetForbidden();
+  const canDelete =
+    deletable &&
+    isDeletable &&
+    !(prop?.type === "expression" && isBindingResetForbidden);
+  const handleDelete = () => {
+    if (onDelete === undefined) {
+      deleteProp(name);
+      return;
+    }
+    onDelete();
+  };
+  return (
+    <Flex align="center" css={{ gap: theme.spacing[3] }}>
+      {/* prevent label growing */}
+      <div>
+        <Tooltip
+          open={isOpen}
+          onOpenChange={setIsOpen}
+          triggerProps={{
+            onClick: (event) => {
+              if (event.altKey) {
+                event.preventDefault();
+                if (canDelete) {
+                  handleDelete();
+                }
+                return;
+              }
+              setIsOpen(true);
+            },
+          }}
+          content={
+            <Flex
+              direction="column"
+              gap="2"
+              css={{ maxWidth: theme.spacing[28] }}
+            >
+              <Text variant="titles" css={{ textTransform: "none" }}>
+                {label}
+              </Text>
+              {propMeta?.description && <Text>{propMeta.description}</Text>}
+              {readOnly && (
+                <Flex gap="1">
+                  <AlertIcon
+                    color={cssVar("--foreground-warning")}
+                    style={{ flexShrink: 0 }}
+                  />
+                  <Text>
+                    The value is controlled by an expression and cannot be
+                    changed.
+                  </Text>
+                </Flex>
+              )}
+              {canDelete && (
+                <Button
+                  color="neutral-destructive"
+                  // to align button text in the middle
+                  prefix={<div></div>}
+                  suffix={<Kbd value={["alt", "click"]} color="moreSubtle" />}
+                  css={{ gridTemplateColumns: "1fr max-content 1fr" }}
+                  onClick={() => {
+                    handleDelete();
+                    setIsOpen(false);
+                  }}
+                >
+                  {isResettable ? "Reset value" : "Delete property"}
+                </Button>
+              )}
+            </Flex>
+          }
+        >
+          <Label truncate color={prop ? "local" : "default"}>
+            {label}
+          </Label>
+        </Tooltip>
+      </div>
+    </Flex>
+  );
+};
+
+export const FieldLabel = ({
+  description,
+  resettable = false,
+  resetDisabled = false,
+  onReset,
+  children,
+}: {
+  /**
+   * Markdown text to show in tooltip or react element
+   */
+  description?: string | ReactNode;
+  /**
+   * when true means field has value and colored true
+   */
+  resettable?: boolean;
+  resetDisabled?: boolean;
+  onReset?: () => void;
+  children: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const canReset = resettable && !resetDisabled;
+  if (typeof description === "string") {
+    description = (
+      <Text
+        css={{
+          "> *": { marginTop: 0 },
+        }}
+        dangerouslySetInnerHTML={{ __html: micromark(description) }}
+      ></Text>
+    );
+  } else if (description) {
+    description = <Text>{description}</Text>;
+  }
+  return (
+    <Flex align="center" css={{ gap: theme.spacing[3] }}>
+      {/* prevent label growing */}
+      <div>
+        <Tooltip
+          open={isOpen}
+          onOpenChange={setIsOpen}
+          triggerProps={{
+            onClick: (event) => {
+              if (event.altKey) {
+                event.preventDefault();
+                if (canReset) {
+                  onReset?.();
+                }
+                return;
+              }
+              setIsOpen(true);
+            },
+          }}
+          content={
+            <Flex
+              direction="column"
+              gap="2"
+              css={{ maxWidth: theme.spacing[28] }}
+            >
+              <Text variant="titles" css={{ textTransform: "none" }}>
+                {children}
+              </Text>
+              {description}
+              {canReset && (
+                <Button
+                  color="neutral-destructive"
+                  // to align button text in the middle
+                  prefix={<div></div>}
+                  suffix={<Kbd value={["alt", "click"]} color="moreSubtle" />}
+                  css={{ gridTemplateColumns: "1fr max-content 1fr" }}
+                  onClick={() => {
+                    onReset?.();
+                    setIsOpen(false);
+                  }}
+                >
+                  Reset value
+                </Button>
+              )}
+            </Flex>
+          }
+        >
+          <Label truncate color={resettable ? "local" : "default"}>
+            {children}
+          </Label>
+        </Tooltip>
+      </div>
+    </Flex>
+  );
+};
