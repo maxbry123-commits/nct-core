@@ -1,0 +1,47 @@
+{
+  "name": "accessibility-skills",
+  "version": "1.0.0",
+  "description": "AI agent skills for web accessibility — WCAG conformance, ARIA patterns, and topic-specific best practices for Claude Code, Cursor, Copilot and other AI agents",
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "wcag",
+    "aria",
+    "claude",
+    "agent-skills",
+    "ai-agent",
+    "skills"
+  ],
+  "homepage": "https://github.com/mgifford/accessibility-skills#readme",
+  "bugs": {
+    "url": "https://github.com/mgifford/accessibility-skills/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgifford/accessibility-skills.git"
+  },
+  "license": "MIT",
+  "author": "Mike Gifford",
+  "bin": {
+    "cli-audit-inspect": "skills/cli-audit/scripts/cli-inspect.mjs"
+  },
+  "files": [
+    "skills/**"
+  ],
+  "scripts": {
+    "validate:evals": "node scripts/validate-evals.mjs",
+    "run:evals": "node scripts/run-evals.mjs",
+    "report:evals": "node scripts/run-evals.mjs --output-dir reports",
+    "test:csv": "node tests/test-csv-parsing.js",
+    "validate:csv": "node tests/test-csv-parsing.js",
+    "generate:arrm-roles": "node scripts/generate-role-indexes.js",
+    "check:arrm-roles": "node scripts/check-arrm-roles.js",
+    "test:shared-fixture": "node tests/validate-shared-fixture.js"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.8.1",
+    "playwright": "^1.54.2"
+  }
+}

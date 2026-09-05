@@ -1,0 +1,49 @@
+{
+  "skill_name": "charts-graphs",
+  "skill_file": "skills/charts-graphs/SKILL.md",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Describe baseline accessibility requirements for a data chart.",
+      "expected_output": "Includes text alternative, data table, and summary insight.",
+      "expectations": ["Text alternative", "Data table", "Summary insight"],
+      "files": [],
+      "must_contain_any": ["text alternative", "data table", "summary"],
+      "must_not_contain": ["visual only"]
+    },
+    {
+      "id": 2,
+      "prompt": "How should charts avoid color-only encoding?",
+      "expected_output": "Uses labels, patterns, or markers in addition to color.",
+      "expectations": ["Non-color cues", "Labels", "Robust interpretation"],
+      "files": [],
+      "must_contain_any": ["pattern", "label", "color"],
+      "must_not_contain": ["color alone"]
+    },
+    {
+      "id": 3,
+      "prompt": "What interaction checks apply to interactive charts?",
+      "expected_output": "Keyboard access and focus visibility for controls and data points.",
+      "expectations": ["Keyboard", "Focus", "Operable controls"],
+      "files": [],
+      "must_contain_any": ["keyboard", "focus", "controls"],
+      "must_not_contain": ["hover only"]
+    },
+    {
+      "id": 4,
+      "prompt": "A complex multi-series bar chart needs an accessible alternative. Map this to ARRM tasks, identify which roles own each task, and explain why this is a cross-role decision. Do not invent task IDs — use only real ARRM tasks.",
+      "expected_output": "Decomposes the problem into multiple ARRM tasks (at minimum IMG-008 or IMG-010 for text description, IMG-018 or CSS-009 for colour independence, TAB-series for data table, INP-004/INP-005 if interactive). Assigns each task to its actual primary owner from the ARRM CSV. Explains that no single role owns all tasks. Distinguishes minimum conformance from usability.",
+      "expectations": [
+        "References at least 4 distinct real ARRM task IDs",
+        "Each ARRM task ID is mapped to its actual primary ownership role from the ARRM CSV",
+        "Identifies Content Authoring, Front-End Development, Visual Design, and/or UX Design as owners of different tasks",
+        "Explains why this requires cross-role coordination",
+        "Does not invent ARRM task IDs that do not exist in the CSV",
+        "Distinguishes between minimum WCAG conformance and usability improvements"
+      ],
+      "files": ["../fixture-chart-alternative.md"],
+      "must_contain_any": ["IMG-008", "IMG-010", "IMG-018", "CSS-009", "TAB-", "INP-004", "cross-role"],
+      "must_not_contain": ["TXT-008", "invented task"]
+    }
+  ]
+}

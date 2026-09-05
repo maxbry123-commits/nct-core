@@ -1,0 +1,215 @@
+{
+  "skill_name": "light-dark-mode",
+  "skill_file": "skills/light-dark-mode/SKILL.md",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Write the base CSS theme tokens for a site that supports both light and dark mode using the modern color system.",
+      "expected_output": "Declares color-scheme: light dark; on :root, uses light-dark() for theme tokens, and keeps prefers-color-scheme only as fallback or a specialized override.",
+      "expectations": [
+        "Theme tokens are defined as CSS custom properties",
+        "color-scheme is declared on :root",
+        "light-dark() is used for token values",
+        "prefers-color-scheme appears only as a fallback or specialized override"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "color-scheme: light dark",
+        "light-dark(",
+        "--color-text"
+      ],
+      "must_not_contain": [
+        "theme tokens duplicated",
+        "JS required",
+        "hardcoded colours"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add an adaptive button, badge, tag, and status color pattern using contrast-color() with a fallback.",
+      "expected_output": "Uses contrast-color() behind @supports for dynamic component foregrounds, with explicit fallback colors and practical component examples.",
+      "expectations": [
+        "Adaptive components use contrast-color()",
+        "The contrast-color() usage is behind an @supports check",
+        "Buttons, badges, tags, or status components are included",
+        "Fallback colors are still present"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "contrast-color(",
+        "@supports (color: contrast-color(red))",
+        "button"
+      ],
+      "must_not_contain": [
+        "color-contrast(",
+        "JS required"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Explain the accessibility cautions around contrast-color() and how to test modern CSS color functions.",
+      "expected_output": "States that contrast-color() returns only black or white today, warns that mid-tone colors can still be problematic, and requires manual WCAG contrast and browser support testing.",
+      "expectations": [
+        "The output explains that contrast-color() is not a replacement for testing",
+        "The output says contrast-color() returns black or white only",
+        "The output warns about mid-tone background colors",
+        "The output mentions manual WCAG contrast checks"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "black or white",
+        "mid-tone",
+        "manual WCAG contrast"
+      ],
+      "must_not_contain": [
+        "testing is optional",
+        "guarantee"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Write a progressive enhancement fallback for browsers that do not support light-dark() or contrast-color().",
+      "expected_output": "Uses @supports and prefers-color-scheme fallbacks so unsupported browsers still get readable colors without JavaScript.",
+      "expectations": [
+        "The response uses @supports for modern CSS color functions",
+        "The response keeps a prefers-color-scheme fallback",
+        "The response does not require JavaScript for theming",
+        "The response keeps readable fallback colors"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "@supports not (color: contrast-color(red))",
+        "prefers-color-scheme",
+        "light-dark("
+      ],
+      "must_not_contain": [
+        "JS required",
+        "theme tokens duplicated"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write a compact testing checklist for a theme that uses color-scheme, light-dark(), contrast-color(), and forced-colors.",
+      "expected_output": "Covers browser support, light and dark mode verification, forced-colours and high contrast mode, and manual WCAG contrast checks.",
+      "expectations": [
+        "Browser support is checked",
+        "Light mode and dark mode are checked",
+        "Forced-colours and high contrast are checked",
+        "Manual WCAG contrast validation is included"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "browser support",
+        "forced-colors",
+        "manual WCAG contrast"
+      ],
+      "must_not_contain": [
+        "automated tools only",
+        "JS required"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Build a three-option theme selector with System, Light, and Dark using native buttons and aria-pressed.",
+      "expected_output": "Uses a labelled group with three native button elements, aria-pressed for selection state, and no arrow-key navigation between options.",
+      "expectations": [
+        "Uses native button elements with type=\"button\"",
+        "Uses aria-pressed=\"true\" for selected option",
+        "Uses a labelled group (role=\"group\" with aria-label)",
+        "Does NOT use role=\"radio\" or role=\"radiogroup\""
+      ],
+      "files": [],
+      "must_contain_any": [
+        "aria-pressed",
+        "type=\"button\"",
+        "role=\"group\""
+      ],
+      "must_not_contain": [
+        "role=\"radio\"",
+        "role=\"radiogroup\"",
+        "aria-checked"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Write JavaScript that separates the user's selected mode from the resolved theme, storing system/light/dark but rendering only light or dark.",
+      "expected_output": "Maintains selectedMode and resolvedTheme as separate values, applies both as data-theme-mode and data-theme attributes, and listens for prefers-color-scheme changes when system is active.",
+      "expectations": [
+        "Separates selected mode from resolved theme",
+        "Uses data-theme-mode for user selection",
+        "Uses data-theme for rendered scheme",
+        "Listens for prefers-color-scheme changes"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "data-theme-mode",
+        "data-theme",
+        "prefers-color-scheme"
+      ],
+      "must_not_contain": [
+        "storing resolved theme as preference",
+        "localStorage.setItem.*dark.*when.*system"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Write an early initialization script that applies the stored theme before first paint to prevent colour flashing.",
+      "expected_output": "Reads localStorage safely with try/catch, validates the stored value, defaults to system, resolves system using prefers-color-scheme, and sets root attributes before DOMContentLoaded.",
+      "expectations": [
+        "Runs before DOMContentLoaded",
+        "Uses try/catch for localStorage",
+        "Validates stored values",
+        "Sets data-theme-mode and data-theme on documentElement"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "localStorage.getItem",
+        "try",
+        "data-theme-mode"
+      ],
+      "must_not_contain": [
+        "DOMContentLoaded.*apply",
+        "waiting for DOM"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Write CSS that makes a theme selector work in Windows High Contrast Mode with visible button boundaries and distinct selected state.",
+      "expected_output": "Uses forced-colors media query with system colors, ensures button borders remain visible, and distinguishes selected from focused state without relying on background colour alone.",
+      "expectations": [
+        "Uses @media (forced-colors: active)",
+        "Uses system color keywords",
+        "Button boundaries remain visible",
+        "Selected state is identifiable"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "forced-colors: active",
+        "ButtonText",
+        "Highlight"
+      ],
+      "must_not_contain": [
+        "forced-color-adjust: none without justification"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Document the failure pattern where storing dark when the user selected system and the OS happened to be dark causes incorrect persistence.",
+      "expected_output": "Explains that when the user selects system, the stored value must be system, not the resolved dark/light value, so that future OS changes continue to affect the page.",
+      "expectations": [
+        "Identifies the incorrect persistence pattern",
+        "Explains why storing the resolved value is wrong",
+        "Shows the correct approach (storing system)"
+      ],
+      "files": [],
+      "must_contain_any": [
+        "system",
+        "storing",
+        "OS changes"
+      ],
+      "must_not_contain": [
+        "storing dark when system is dark is correct"
+      ]
+    }
+  ]
+}
