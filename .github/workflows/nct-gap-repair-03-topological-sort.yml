@@ -1,0 +1,62 @@
+name: NCT GAP Repair 03 Topological Sort
+run-name: NCT GAP Repair 03 Topological Sort • ${{ github.sha }}
+
+on:
+  push:
+    paths:
+      - 'reasoning_kernel/decision_on_demand/reasoning_modules/topological_sort.py'
+      - '.github/workflows/nct-gap-repair-03-topological-sort.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nct-gap-repair-03-topological-sort
+  cancel-in-progress: false
+
+jobs:
+  verify-final:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+      - name: Install deterministic dependency
+        run: python -m pip install 'networkx>=3.2,<4'
+      - name: SHERIFF and VALIDATOR
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f reasoning_kernel/decision_on_demand/reasoning_modules/topological_sort.py
+          python -m py_compile reasoning_kernel/decision_on_demand/reasoning_modules/topological_sort.py
+      - name: verify_final
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path('reasoning_kernel/decision_on_demand/reasoning_modules/topological_sort.py')
+          spec = importlib.util.spec_from_file_location('nct_topological_sort', path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec and spec.loader
+          spec.loader.exec_module(module)
+
+          deps = {'build': ['schema', 'lint'], 'deploy': ['build'], 'schema': [], 'lint': []}
+          order = module.topological_sort(deps)
+          assert set(order) == set(deps)
+          assert order.index('schema') < order.index('build')
+          assert order.index('lint') < order.index('build')
+          assert order.index('build') < order.index('deploy')
+
+          try:
+              module.topological_sort({'a': ['b'], 'b': ['a']})
+          except ValueError:
+              pass
+          else:
+              raise AssertionError('cycle must fail closed')
+          print('VERIFIED_CLOSED topological_sort implementation + cycle gate')
+          PY
