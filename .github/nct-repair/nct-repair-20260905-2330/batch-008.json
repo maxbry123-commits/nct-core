@@ -1,0 +1,45 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/bokeh-3.1.0-py3-none-any.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/bokeh-3.1.0-py3-none-any.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "4503a48613bee9031093897f812cbbb09e52ddd7",
+      "bytes": 39346423,
+      "status": "PREPARED",
+      "sha256": "bc8eb691186ab6ac53cb99ac236826311e84c35373ab39195d298a71d3e58bba"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/gdal-3.5.1.zip",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/gdal-3.5.1.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "f29ca4d8fa91371bad960cca451467a51673bcc7",
+      "bytes": 17469305,
+      "status": "PREPARED",
+      "sha256": "1cdf0a1bf28c2dae1f2c422d5fbb27ca3c0d592a7d286f451bc47626c0c5f71d"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/gensim-4.3.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/gensim-4.3.1-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "9c17c0058739a6850f9de09c63147da2dc441a55",
+      "bytes": 8549049,
+      "status": "PREPARED",
+      "sha256": "4cb0348cb14e80183cdaa5e0ae72c13eb534840aae743568b9d1f048d76dfde0"
+    }
+  ]
+}
