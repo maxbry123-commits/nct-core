@@ -1,0 +1,3 @@
+trigger=nct-zip-queue-39-v1
+workflow=.github/workflows/nct-zip-queue-39-skill-copy.yml
+workflow_commit=f0fded92886aa831c15523b2a250c825b70bd243
