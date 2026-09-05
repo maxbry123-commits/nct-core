@@ -1,0 +1,71 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/gensim-tests.tar",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/gensim-tests.tar",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "eb5f3fd6a504eb0be2bae4337e62c65525c3ef92",
+      "bytes": 32102400,
+      "status": "PREPARED",
+      "sha256": "2bb43448c1a588591ecfead52a497cd5c04171c3ad538d51a2f0b82f2685f094"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/h5py-3.7.0-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/h5py-3.7.0-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "f3527e36d77298859ecfcf144d663d182a5e94a8",
+      "bytes": 9035895,
+      "status": "PREPARED",
+      "sha256": "106c5b955b24a5830a22fcaeef527b5994aeb4e9ec50ef23b293ad696ce26094"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/libhdf5-1.12.1.zip",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/libhdf5-1.12.1.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "48ce703a5a766eb4769366e2b4ab903a29cf9b9f",
+      "bytes": 10183905,
+      "status": "PREPARED",
+      "sha256": "9f8721d5d487e67b5eb88aad6abfc50285212d38cf028fa57d20ca2e63b3f7af"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/libmagic-5.42.zip",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/libmagic-5.42.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "3ee7d57ee40881af70a15e0cb08af0bd365c70eb",
+      "bytes": 8497657,
+      "status": "PREPARED",
+      "sha256": "78e6aaaac561c9f64e799ce20ee4625f8e6e34e1dccda58cd243cfc1d9b6f171"
+    },
+    {
+      "component": "ToolJet",
+      "parts": 78,
+      "path": "frontend/assets/libs/pyodide-0.23.2/matplotlib-3.5.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "source_commit": "53b56d3d233d5a4fb0e3e4ef58e781b8cb1c5100",
+      "source_url": "https://github.com/ToolJet/ToolJet.git",
+      "destination": "Componentes open soure nct/ToolJet/frontend/assets/libs/pyodide-0.23.2/matplotlib-3.5.2-cp311-cp311-emscripten_3_1_32_wasm32.whl",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "b5eb0f0f962b585381cc04fabb257c883e943948",
+      "bytes": 15580540,
+      "status": "PREPARED",
+      "sha256": "a2c1a1ffabd8e07365381a59a55e5bd4282f4490b1e8a05e70261beb7c92e524"
+    }
+  ]
+}
