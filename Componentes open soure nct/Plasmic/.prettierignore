@@ -1,0 +1,22 @@
+pnpm-lock.yaml
+
+.next/
+.venv/
+build/
+build-server/
+dist/
+generated*/
+node_modules/
+playwright-report/
+storybook-static/
+
+/examples/hydrogen-*/
+/packages/create-plasmic-app/cpa-out/
+/packages/react-web/lib/**
+/packages/**/api/
+/plasmicpkgs/**/api/
+/platform/wab/deps/
+/platform/wab/public/static/
+
+# Helm chart templates contain Go template syntax that prettier cannot parse
+/devops/charts/**/templates/**

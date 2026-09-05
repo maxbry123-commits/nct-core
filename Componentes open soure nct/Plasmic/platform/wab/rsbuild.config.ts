@@ -1,0 +1,312 @@
+import { defineConfig } from "@rsbuild/core";
+import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginSass } from "@rsbuild/plugin-sass";
+import {
+  Assets,
+  Compiler,
+  CopyRspackPlugin,
+  DefinePlugin,
+  ProvidePlugin,
+  RspackPluginInstance,
+} from "@rspack/core";
+import { execSync } from "child_process";
+import HtmlWebpackPlugin from "html-webpack-plugin";
+import MonacoWebpackPlugin from "monaco-editor-webpack-plugin";
+import { homepage } from "./package.json";
+import { StudioHtmlPlugin } from "./tools/webpack/StudioHtmlPlugin";
+import {
+  OPTIONAL_VAR,
+  REQUIRED_VAR,
+  mkDefinePluginOptsForEnv,
+} from "./tools/webpack/mkDefinePluginOptsForEnv";
+
+const commitHash = execSync("git rev-parse HEAD").toString().slice(0, 6);
+const buildEnv = process.env.NODE_ENV ?? "production";
+const isProd = buildEnv === "production";
+// Interface to listen on, shared with the other servers in the dev stack.
+const bindHost: string = process.env.BIND_HOST ?? "0.0.0.0";
+const port: number = process.env.PORT ? +process.env.PORT : 3003;
+const backendPort: number = process.env.BACKEND_PORT
+  ? +process.env.BACKEND_PORT
+  : 3004;
+// Where to reach the backend, which is not necessarily where it binds.
+const backendHost: string = process.env.BACKEND_HOST ?? "localhost";
+const publicUrl: string =
+  process.env.PUBLIC_URL ?? (isProd ? homepage : `http://localhost:${port}`);
+const staticUrl: string = process.env.STATIC_URL ?? publicUrl;
+
+console.log(`Starting rsbuild...
+- commitHash: ${commitHash}
+- buildEnv: ${buildEnv}
+- publicUrl: ${publicUrl}
+- bindHost: ${bindHost}
+- port: ${port}
+- backendHost: ${backendHost}
+- backendPort: ${backendPort}
+`);
+
+/**
+ * Appends a sourceMappingURL for js files in paths, by looking for
+ * the source map file with the same hash-tagged name
+ */
+class AppendSourceMapWithHash implements RspackPluginInstance {
+  constructor(
+    private opts: {
+      paths: string[];
+    }
+  ) {}
+
+  apply(compiler: Compiler) {
+    const processFile = (filePath: string, assets: Assets) => {
+      if (this.shouldProcessFile(filePath)) {
+        const sourceMapFilePath = this.makeSourceMapFilePath(filePath);
+        if (assets[sourceMapFilePath]) {
+          let content = assets[filePath].source();
+          // We use the full path (with publicUrl) because the files may be
+          // loaded from the inner frame and so the relative path would be
+          // wrong.
+          const newMapping = `//# sourceMappingURL=${publicUrl}/${sourceMapFilePath}`;
+          if (content.includes("//# sourceMappingURL=")) {
+            content = content
+              .toString()
+              .replace(/\/\/# sourceMappingURL=[^\s*]*\s*$/, newMapping);
+          } else {
+            content = content.toString() + `\n${newMapping}\n`;
+          }
+          // @ts-expect-error: don't have access to Source classes
+          assets[filePath] = {
+            source: () => content,
+            size: () => content.length,
+          };
+        }
+      }
+    };
+
+    // This hook transforms the source map reference in dev mode
+    compiler.hooks.compilation.tap("AppedSourceMapWithHash", (compilation) => {
+      compilation.hooks.processAssets.tapAsync(
+        {
+          name: "AppendSourceMapWithHash",
+          stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONS,
+        },
+        (assets, callback) => {
+          Object.keys(assets).forEach((filePath) => {
+            processFile(filePath, assets);
+          });
+          callback();
+        }
+      );
+    });
+
+    // This hook appends the source map reference when doing `pnpm build`. Not
+    // sure why this is necessary and why the previous hook alone isn't enough;
+    // with just the previous hook, the source map reference is stripped out
+    // completely for `pnpm build`.
+    compiler.hooks.emit.tapAsync(
+      "AppendSourceMapWithHash",
+      (compilation, callback) => {
+        Object.keys(compilation.assets).forEach((filePath) => {
+          processFile(filePath, compilation.assets);
+        });
+        callback();
+      }
+    );
+  }
+
+  private makeSourceMapFilePath(file: string) {
+    const parts = file.split(".");
+    const ext = parts[parts.length - 1];
+    const hash = parts[parts.length - 2];
+    const rest = parts.slice(0, parts.length - 2).join(".");
+    return `${rest}.${ext}.${hash}.map`;
+  }
+
+  private shouldProcessFile(filePath: string) {
+    return (
+      filePath.endsWith(".js") &&
+      this.opts.paths.some((path) => filePath.startsWith(path))
+    );
+  }
+}
+
+export default defineConfig({
+  dev: {
+    // We write intermediate files to disk (build/) for debugging,
+    // and also because our local host server will serve from there.
+    writeToDisk: publicUrl.includes("localhost") ? true : false,
+  },
+  server: {
+    host: bindHost,
+    port,
+    proxy: {
+      "/api": {
+        target: `http://${backendHost}:${backendPort}`,
+        ws: true,
+      },
+    },
+  },
+  source: {
+    entry: {
+      index: "src/wab/client/main.tsx",
+    },
+  },
+  resolve: {
+    alias: {
+      // Force a single jquery instance in the bundle. jquery plugins
+      // (jquery-serializejson) import "jquery" themselves, and under pnpm's
+      // isolated node_modules they can resolve a different copy than the app
+      // (the workspace has both 3.5.1 and 3.7.1), so the plugin registers
+      // itself on an instance the app never sees.
+      jquery: "./node_modules/jquery",
+      // data-urls.ts only falls back to xmldom when there is no window.
+      "@xmldom/xmldom": false,
+      ...(buildEnv === "production"
+        ? {}
+        : {
+            // In case you are linking to locally built packages,
+            // sometimes you end up with duplicate React versions.
+            // This fixes that issue.
+            react: "./node_modules/react",
+            "react-dom": "./node_modules/react-dom",
+          }),
+    },
+  },
+  output: {
+    assetPrefix: staticUrl,
+    distPath: {
+      root: "build",
+    },
+    charset: "utf8",
+    sourceMap: {
+      js: isProd ? "source-map" : "cheap-module-source-map",
+      css: true,
+    },
+  },
+  performance: {
+    chunkSplit: {
+      strategy: "split-by-experience",
+      override: { maxSize: 1_000_000 },
+    },
+  },
+  plugins: [pluginReact(), pluginSass()],
+  tools: {
+    // We use html-webpack-plugin directly instead of relying in @rsbuild/core
+    // html plugin so it works with StudioHtmlPlugin.
+    htmlPlugin: false,
+    rspack: {
+      resolve: {
+        fallback: {
+          // We are using "xml" package in web-exporter for serialization, it imports
+          // stream internally, but we don't need it so we set it to false so we can use
+          // web-exporter functions on the client side.
+          stream: false,
+        },
+      },
+      plugins: [
+        // For most files, we are appending a commitHash to the file name
+        // for caching and cache-busting. Ideally they'd be using a
+        // content hash instead, but the client needs to know the exact
+        // file name to use, and it's too much work to expose each
+        // one by one. Maybe one day! For now, at least this means all
+        // the files are cacheable until the next deployment.
+        new CopyRspackPlugin({
+          patterns: [
+            {
+              from: "dev-build/static/styles/",
+              to: `static/styles/[path][name].${commitHash}[ext]`,
+            },
+            {
+              from: "../sub/public/static/",
+              to: `static/[path][name].${commitHash}[ext]`,
+            },
+            {
+              from: "../live-frame/build/",
+              to: `static/live-frame/build/[path][name].${commitHash}[ext]`,
+            },
+            {
+              from: "../react-web-bundle/build/",
+              to: `static/react-web-bundle/build/[path][name].${commitHash}[ext]`,
+            },
+            {
+              from: "../canvas-packages/build/",
+              to: `static/canvas-packages/build/[path][name].${commitHash}[ext]`,
+            },
+            {
+              from: "../loader-html-hydrate/build/",
+              to: "static/js/",
+            },
+          ],
+        }),
+        new AppendSourceMapWithHash({
+          paths: [
+            "static/sub/build/",
+            "static/live-frame/build/",
+            "static/react-web-bundle/build/",
+            "static/canvas-packages/build/",
+          ],
+        }),
+        new HtmlWebpackPlugin({
+          template: "../sub/public/static/host.html",
+          filename: `static/host.html`,
+          inject: false,
+          templateParameters: {
+            commitHash,
+          },
+        }),
+        new HtmlWebpackPlugin({
+          template: "../sub/public/static/popup.html",
+          filename: `static/popup.html`,
+          inject: false,
+        }),
+        new ProvidePlugin({
+          process: [require.resolve("process/browser")],
+          Buffer: ["buffer", "Buffer"],
+        }),
+        new DefinePlugin(
+          mkDefinePluginOptsForEnv({
+            NODE_ENV: REQUIRED_VAR,
+            COMMITHASH: commitHash,
+            STATIC_URL: OPTIONAL_VAR,
+            POSTHOG_API_KEY: OPTIONAL_VAR,
+            POSTHOG_HOST: OPTIONAL_VAR,
+            POSTHOG_REVERSE_PROXY_HOST: OPTIONAL_VAR,
+            SENTRY_DSN: OPTIONAL_VAR,
+            SENTRY_ORG_ID: OPTIONAL_VAR,
+            SENTRY_PROJECT_ID: OPTIONAL_VAR,
+            STRIPE_PUBLISHABLE_KEY: OPTIONAL_VAR,
+          })
+        ),
+        new MonacoWebpackPlugin(),
+        new HtmlWebpackPlugin(
+          Object.assign(
+            {},
+            {
+              inject: true,
+              template: "./public/index.html",
+              templateParameters: {
+                staticUrl,
+              },
+            },
+            buildEnv === "production"
+              ? {
+                  minify: {
+                    removeComments: true,
+                    collapseWhitespace: true,
+                    removeRedundantAttributes: true,
+                    useShortDoctype: true,
+                    removeEmptyAttributes: true,
+                    removeStyleLinkTypeAttributes: true,
+                    keepClosingSlash: true,
+                    minifyJS: true,
+                    minifyCSS: true,
+                    minifyURLs: true,
+                  },
+                }
+              : undefined
+          )
+        ),
+        new StudioHtmlPlugin(commitHash),
+      ],
+    },
+  },
+});
