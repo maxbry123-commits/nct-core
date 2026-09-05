@@ -1,0 +1,32 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/@next-swc-darwin-arm64-npm-15.2.0-0a0a2a1c43-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/@next-swc-darwin-arm64-npm-15.2.0-0a0a2a1c43-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "ba96e898b1f9855b013bbf31f608a0126f86b25c",
+      "bytes": 38768031,
+      "status": "PREPARED",
+      "sha256": "4349848c1bdb45c4da89eea074e20efaa01a02a60a112aa31b70c07c8628e00b"
+    },
+    {
+      "component": "Motion",
+      "parts": 24,
+      "path": ".yarn/cache/@next-swc-win32-x64-msvc-npm-15.2.0-a447432cd0-8.zip",
+      "source_commit": "1b037b0032578b52af94b06ff3920bfa0aaa5e36",
+      "source_url": "https://github.com/motiondivision/motion.git",
+      "destination": "Componentes open soure nct/Motion/.yarn/cache/@next-swc-win32-x64-msvc-npm-15.2.0-a447432cd0-8.zip",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "5edd244d2d6118159567cdcd5b92846cfcec86a3",
+      "bytes": 42474661,
+      "status": "PREPARED",
+      "sha256": "8512d9aa213bd0f1ddda467d043cf6b19f87858cb94ec05155d5e8d0ab203798"
+    }
+  ]
+}
