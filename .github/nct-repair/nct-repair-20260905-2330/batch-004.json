@@ -1,0 +1,58 @@
+{
+  "task_id": "nct-repair-20260905-2330",
+  "run_id": "33999254690",
+  "files": [
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "experiments/scripts/black_3600x2700.ppm",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/experiments/scripts/black_3600x2700.ppm",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "719fbd27b63c351748a83f378544dda1e830c5cb",
+      "bytes": 29160017,
+      "status": "PREPARED",
+      "sha256": "ce5c4eb9149200e8e344fddbd9eeb93234434c86d4704d361d1685c6b958d485"
+    },
+    {
+      "component": "Penpot",
+      "parts": 18,
+      "path": "frontend/resources/images/features/2.16-fixes.gif",
+      "source_commit": "5b3a1d93603cb14ce0f584cb462050895a6c5c3a",
+      "source_url": "https://github.com/penpot/penpot.git",
+      "destination": "Componentes open soure nct/Penpot/frontend/resources/images/features/2.16-fixes.gif",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "491d6af88c594de11c6332438d9e6d792ce614e2",
+      "bytes": 8576955,
+      "status": "PREPARED",
+      "sha256": "1d96062fe3e7093f11991807f0dc97d469c3124b7f0f109f6b521d0ac5c00300"
+    },
+    {
+      "component": "PlantUML",
+      "parts": 5,
+      "path": "src/main/resources/teavm/awslib20.min.js",
+      "source_commit": "c7d69645e01e17c1ec2ba210b8416d0612ca6fa8",
+      "source_url": "https://github.com/plantuml/plantuml.git",
+      "destination": "Componentes open soure nct/PlantUML/src/main/resources/teavm/awslib20.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "3118bddacd616349353e9ec82370fa35d7275417",
+      "bytes": 10182413,
+      "status": "PREPARED",
+      "sha256": "1ecae17a7fa4059c7984bbc665e581225288e6c0591e6a8e07519643f2385f41"
+    },
+    {
+      "component": "PlantUML",
+      "parts": 5,
+      "path": "src/main/resources/teavm/ibm.min.js",
+      "source_commit": "c7d69645e01e17c1ec2ba210b8416d0612ca6fa8",
+      "source_url": "https://github.com/plantuml/plantuml.git",
+      "destination": "Componentes open soure nct/PlantUML/src/main/resources/teavm/ibm.min.js",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "092a5dd84a627c66e9c7022ffdd0acb70afcb31e",
+      "bytes": 23636085,
+      "status": "PREPARED",
+      "sha256": "90099c682e3d428b0af799787f99b2b928c19bfcf5a3719d36ab09dd550f7f51"
+    }
+  ]
+}
