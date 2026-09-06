@@ -1,0 +1,38 @@
+{
+  "task_id": "nct-repair-openpencil-lfs-20260905-2005",
+  "run_id": "34003288667",
+  "files": [
+    {
+      "component": "OpenPencil",
+      "parts": 18,
+      "path": "tests/fixtures/fonts/NotoSansSC-Regular.ttf",
+      "source_url": "https://github.com/open-pencil/open-pencil.git",
+      "source_commit": "be942783dcb03005de6e9ccf5a3f592d0dca107a",
+      "source_pointer_blob": "85576bfae0604af4762b3cd1e9d6c70c67813f3f",
+      "expected_sha256": "450625c8d46ab3df97b7904ded955ec2746d17ec76740cb1e91d1ba63a0f89af",
+      "expected_size": 10540644,
+      "destination": "Componentes open soure nct/OpenPencil/tests/fixtures/fonts/NotoSansSC-Regular.ttf",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "927148691e6debcff3a90e8e8c41e2d595106559",
+      "bytes": 10540644,
+      "status": "PREPARED",
+      "sha256": "450625c8d46ab3df97b7904ded955ec2746d17ec76740cb1e91d1ba63a0f89af"
+    },
+    {
+      "component": "OpenPencil",
+      "parts": 18,
+      "path": "tests/fixtures/material3.fig",
+      "source_url": "https://github.com/open-pencil/open-pencil.git",
+      "source_commit": "be942783dcb03005de6e9ccf5a3f592d0dca107a",
+      "source_pointer_blob": "e16fff601e6f00f33cd46307f9ff5884608bd8e0",
+      "expected_sha256": "75c99e40a4a0e62db6e8f1127ef586369cc6737bd8c9f6369191ce7431f43519",
+      "expected_size": 57312586,
+      "destination": "Componentes open soure nct/OpenPencil/tests/fixtures/material3.fig",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "75fe0eea562b81df4ed0a98cbbbed5b334d56bd1",
+      "bytes": 57312586,
+      "status": "PREPARED",
+      "sha256": "75c99e40a4a0e62db6e8f1127ef586369cc6737bd8c9f6369191ce7431f43519"
+    }
+  ]
+}
