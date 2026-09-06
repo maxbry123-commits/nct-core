@@ -1,0 +1,67 @@
+# Base copiada del repair skill-derived nct-repair-20260905-2330; delta quirurgico: TASK_ID, PLAN y verificacion LFS por OID+size.
+name: nct-repair-openpencil-lfs-20260905-2005
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/nct-repair-openpencil-lfs-20260905-2005/TRIGGER"]
+permissions:
+  contents: write
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+  GIT_LFS_SKIP_PUSH: "1"
+  GIT_LFS_SKIP_DOWNLOAD: "1"
+  GIT_TERMINAL_PROMPT: "0"
+concurrency:
+  group: ${{ github.repository }}-main-componentes-open-soure-nct
+  cancel-in-progress: false
+jobs:
+  download-extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          lfs: false
+      - name: Copy locked repair code and apply surgical LFS verification delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/nct-repair-20260905-2330/extract_existing_parts.py "${RUNNER_TEMP}/repair.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path(__import__('os').environ['RUNNER_TEMP']) / 'repair.py'
+          s = p.read_text()
+          old1 = """    if meta.get('type') != 'file' or not re.fullmatch(r'[a-f0-9]{40}', meta.get('sha', '')):\n        raise RuntimeError('SOURCE_TYPE_GAP')\n    return meta, owner_repo\n"""
+          new1 = """    if meta.get('type') != 'file' or not re.fullmatch(r'[a-f0-9]{40}', meta.get('sha', '')):\n        raise RuntimeError('SOURCE_TYPE_GAP')\n    if item.get('source_pointer_blob') and meta['sha'] != item['source_pointer_blob']:\n        raise RuntimeError('SOURCE_POINTER_BLOB_MISMATCH')\n    if item.get('expected_sha256'):\n        meta['expected_sha256'] = item['expected_sha256']\n        meta['expected_size'] = int(item['expected_size'])\n    return meta, owner_repo\n"""
+          old2 = """    blob = git('hash-object', '--no-filters', str(path))\n    if blob != meta['sha'] or size != meta['size']:\n        raise RuntimeError('SOURCE_HASH_MISMATCH')\n    return blob\n"""
+          new2 = """    blob = git('hash-object', '--no-filters', str(path))\n    if meta.get('expected_sha256'):\n        if sha256(path) != meta['expected_sha256'] or size != meta['expected_size']:\n            raise RuntimeError('SOURCE_HASH_MISMATCH')\n        meta['sha'] = blob\n        meta['size'] = size\n    elif blob != meta['sha'] or size != meta['size']:\n        raise RuntimeError('SOURCE_HASH_MISMATCH')\n    return blob\n"""
+          if s.count(old1) != 1 or s.count(old2) != 1:
+              raise SystemExit('SURGICAL_PATCH_CONTEXT_GAP')
+          p.write_text(s.replace(old1, new1).replace(old2, new2))
+          PY
+      - name: Repair only the three declared OpenPencil files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_LFS_SKIP_SMUDGE: "1"
+          GIT_LFS_SKIP_PUSH: "1"
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git config --global filter.lfs.smudge ''
+          git config --global filter.lfs.clean ''
+          git config --global filter.lfs.process ''
+          git config --global filter.lfs.required false
+          git config --global core.compression 0
+          python3 "${RUNNER_TEMP}/repair.py" --queue scripts/nct-repair-openpencil-lfs-20260905-2005/PLAN.json
+      - name: Preserve checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nct-repair-openpencil-lfs-20260905-2005-checkpoint
+          path: ${{ runner.temp }}/nct-repair-openpencil-lfs-20260905-2005-checkpoint.json
+          if-no-files-found: warn
