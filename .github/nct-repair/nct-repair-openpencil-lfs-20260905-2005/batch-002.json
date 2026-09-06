@@ -1,0 +1,22 @@
+{
+  "task_id": "nct-repair-openpencil-lfs-20260905-2005",
+  "run_id": "34003288667",
+  "files": [
+    {
+      "component": "OpenPencil",
+      "parts": 18,
+      "path": "tests/fixtures/nuxtui.fig",
+      "source_url": "https://github.com/open-pencil/open-pencil.git",
+      "source_commit": "be942783dcb03005de6e9ccf5a3f592d0dca107a",
+      "source_pointer_blob": "a43207585decf4becd926ed2754db6d3a3bab641",
+      "expected_sha256": "add13fd8037ea2d1c3df1e86a224425b0c11dfa093f102a60b9e122ac8ea4361",
+      "expected_size": 85671218,
+      "destination": "Componentes open soure nct/OpenPencil/tests/fixtures/nuxtui.fig",
+      "operation": "RECONSTRUCT_EXISTING",
+      "blob": "a9b218f91bb62115b1e2d1b49e3842173644b74b",
+      "bytes": 85671218,
+      "status": "PREPARED",
+      "sha256": "add13fd8037ea2d1c3df1e86a224425b0c11dfa093f102a60b9e122ac8ea4361"
+    }
+  ]
+}
